@@ -65,6 +65,7 @@ func (s *FuncPerSecond) Exec(cache map[Req][]models.Series) ([]models.Series, er
 			Datapoints: out,
 			Interval:   serie.Interval,
 		}
+		s.Tags["perSecond"] = 1
 		outputs = append(outputs, s)
 		cache[Req{}] = append(cache[Req{}], s)
 	}
