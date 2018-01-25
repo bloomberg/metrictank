@@ -2,9 +2,9 @@ package expr
 
 import (
 	"fmt"
-	"math"
 
 	"github.com/grafana/metrictank/api/models"
+	"github.com/grafana/metrictank/consolidation"
 	"github.com/grafana/metrictank/util"
 	"github.com/raintank/dur"
 	"gopkg.in/raintank/schema.v1"
@@ -18,12 +18,12 @@ type FuncSummarize struct {
 }
 
 func NewSummarize() GraphiteFunc {
-	return &FuncSummarize{fn: "sum", alignToFrom: "false"}
+	return &FuncSummarize{fn: "sum", alignToFrom: false}
 }
 
 func (s *FuncSummarize) Signature() ([]Arg, []Arg) {
 	return []Arg{
-		ArgSeriesLists{val: &s.in},
+		ArgSeriesList{val: &s.in},
 		ArgString{key: "interval", val: &s.intervalString, validator: []Validator{IsIntervalString}},
 		ArgString{key: "func", opt: true, val: &s.fn, validator: []Validator{IsConsolFunc}},
 		ArgBool{key: "alignToFrom", opt: true, val: &s.alignToFrom},
@@ -56,8 +56,14 @@ func (s *FuncSummarize) Exec(cache map[Req][]models.Series) ([]models.Series, er
 
 	var outputs []models.Series
 	for _, serie := range series {
-		var newStart, newEnd int = serie.QueryFrom, serie.QueryTo
-		if s.alignToFrom {
+		var newStart, newEnd uint32 = serie.QueryFrom, serie.QueryTo
+		if len(serie.Datapoints) > 0 {
+			newStart = serie.Datapoints[0].Ts
+			newEnd = serie.Datapoints[len(serie.Datapoints)-1].Ts + serie.Interval
+		} else {
+			//return ... what do?
+		}
+		if !s.alignToFrom {
 			newStart = newStart - (newStart % interval)
 			newEnd = newEnd - (newEnd % interval) + interval
 		}
@@ -68,9 +74,11 @@ func (s *FuncSummarize) Exec(cache map[Req][]models.Series) ([]models.Series, er
 			newEnd = alignedEnd
 		}
 
+		// Graphite seems to set QueryFrom, QueryTo = newStart, newEnd here
+		// if series.start is equivalent to QueryFrom and series.end " QueryTo
 		output := models.Series{
 			Target:     newName(serie.Target),
-			QueryPatt:  newName(serie.QueryPatt),
+			QueryPatt:  newName(serie.QueryPatt), // Does this exist?
 			Tags:       serie.Tags,
 			Datapoints: out,
 			Interval:   interval,
@@ -81,30 +89,23 @@ func (s *FuncSummarize) Exec(cache map[Req][]models.Series) ([]models.Series, er
 	return outputs, nil
 }
 
-func summarizeValues(s models.Series, fn string, interval, start, end uint64) ([]schema.Point, error) {
+func summarizeValues(serie models.Series, fn string, interval, start, end uint32) ([]schema.Point, uint32) {
 	out := pointSlicePool.Get().([]schema.Point)
 
-	aggFunc := GetAggFunc(fn)
+	aggFunc := consolidation.GetAggFunc(consolidation.FromConsolidateBy(fn))
 
-	// intervalPoints := interval / s.Interval // for xFilesFactor
-
-	numPoints = util.Min(uint32(len(s.Datapoints)), (start-end)/interval)
+	numPoints := int(util.Min(uint32(len(serie.Datapoints)), (start-end)/interval))
 
 	ts := start
-	for i := 0; ts < end; ts += interval {
-		s, nonNull := i, 0
-		for ; i < numPoints && s.Datapoints[i].Ts < ts+interval; i++ {
-			if s.Datapoints[i].Ts <= ts {
+	for i := 0; i < numPoints && ts < end; ts += interval {
+		s := i
+		for ; i < numPoints && serie.Datapoints[i].Ts < ts+interval; i++ {
+			if serie.Datapoints[i].Ts <= ts {
 				s = i
-			}
-			if s.Datapoints[i].Ts >= ts && !math.IsNaN(s.Datapoints[i].Val) {
-				nonNull += 1
 			}
 		}
 
-		// xFilesFactor processing would be implemented here
-		_ = nonNull
-		out.append(schema.Point{Val: aggFunc(datapoints[s:i]), Ts: ts + interval})
+		out = append(out, schema.Point{Val: aggFunc(serie.Datapoints[s:i]), Ts: ts})
 	}
 
 	return out, ts
