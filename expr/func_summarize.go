@@ -60,8 +60,6 @@ func (s *FuncSummarize) Exec(cache map[Req][]models.Series) ([]models.Series, er
 		if len(serie.Datapoints) > 0 {
 			newStart = serie.Datapoints[0].Ts
 			newEnd = serie.Datapoints[len(serie.Datapoints)-1].Ts + serie.Interval
-		} else {
-			//return ... what do?
 		}
 		if !s.alignToFrom {
 			newStart = newStart - (newStart % interval)
@@ -74,8 +72,6 @@ func (s *FuncSummarize) Exec(cache map[Req][]models.Series) ([]models.Series, er
 			newEnd = alignedEnd
 		}
 
-		// Graphite seems to set QueryFrom, QueryTo = newStart, newEnd here
-		// if series.start is equivalent to QueryFrom and series.end " QueryTo
 		output := models.Series{
 			Target:     newName(serie.Target),
 			QueryPatt:  newName(serie.QueryPatt), // Does this exist?
