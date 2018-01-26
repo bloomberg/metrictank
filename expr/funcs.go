@@ -72,6 +72,7 @@ func init() {
 		"stddevSeries":   {NewAggregateConstructor("stddev", crossSeriesStddev), true},
 		"sum":            {NewAggregateConstructor("sum", crossSeriesSum), true},
 		"sumSeries":      {NewAggregateConstructor("sum", crossSeriesSum), true},
+		"summarize":      {NewSummarize, false},
 		"transformNull":  {NewTransformNull, true},
 	}
 }

@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/grafana/metrictank/api/models"
-	"github.com/grafana/metrictank/consolidation"
 	"github.com/grafana/metrictank/batch"
+	"github.com/grafana/metrictank/consolidation"
 	"github.com/grafana/metrictank/util"
 	"github.com/raintank/dur"
 	"gopkg.in/raintank/schema.v1"
@@ -42,7 +42,9 @@ func (s *FuncSummarize) Exec(cache map[Req][]models.Series) ([]models.Series, er
 		return nil, err
 	}
 
-	aggFunc := consolidation.GetAggFunc(consolidation.FromConsolidateBy(fn))
+	interval, err := dur.ParseDuration(s.intervalString)
+
+	aggFunc := consolidation.GetAggFunc(consolidation.FromConsolidateBy(s.fn))
 
 	var alignToFromTarget string
 	if s.alignToFrom {
@@ -85,8 +87,6 @@ func (s *FuncSummarize) Exec(cache map[Req][]models.Series) ([]models.Series, er
 
 func summarizeValues(serie models.Series, aggFunc batch.AggFunc, interval, start, end uint32) ([]schema.Point, uint32) {
 	out := pointSlicePool.Get().([]schema.Point)
-
-	aggFunc := consolidation.GetAggFunc(consolidation.FromConsolidateBy(fn))
 
 	numPoints := int(util.Min(uint32(len(serie.Datapoints)), (start-end)/interval))
 
