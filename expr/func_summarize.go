@@ -42,8 +42,7 @@ func (s *FuncSummarize) Exec(cache map[Req][]models.Series) ([]models.Series, er
 		return nil, err
 	}
 
-	interval, err := dur.ParseDuration(s.intervalString)
-
+	interval, _ := dur.ParseDuration(s.intervalString)
 	aggFunc := consolidation.GetAggFunc(consolidation.FromConsolidateBy(s.fn))
 
 	var alignToFromTarget string
