@@ -376,10 +376,10 @@ func TestSummarizeConsolidated(t *testing.T) {
 			},
 		},
 	}
-	testSummarize("Aligned Multiple", input, outputSum[0], "10s", "sum", false, t)
-	testSummarize("Aligned Multiple", input, outputSum[1], "10s", "sum", true, t)
-	testSummarize("Aligned Multiple", input, outputMax[0], "10s", "max", false, t)
-	testSummarize("Aligned Multiple", input, outputMax[1], "10s", "max", true, t)
+	testSummarize("Consolidated", input, outputSum[0], "10s", "sum", false, t)
+	testSummarize("Consolidated", input, outputSum[1], "10s", "sum", true, t)
+	testSummarize("Consolidated", input, outputMax[0], "10s", "max", false, t)
+	testSummarize("Consolidated", input, outputMax[1], "10s", "max", true, t)
 }
 
 // Tests misaligned QueryFrom/QueryTo with Interval and IntervalString
@@ -548,10 +548,10 @@ func testSummarizeExtendedRequest(t *testing.T) {
 		},
 	}
 
-	testSummarize("Extended", input, outputSum[0], "60s", "sum", false, t)
-	testSummarize("Extended", input, outputSum[1], "60s", "sum", true, t)
-	testSummarize("Extended", input, outputMax[0], "60s", "max", false, t)
-	testSummarize("Extended", input, outputMax[1], "60s", "max", true, t)
+	testSummarize("Extended Request", input, outputSum[0], "60s", "sum", false, t)
+	testSummarize("Extended Request", input, outputSum[1], "60s", "sum", true, t)
+	testSummarize("Extended Request", input, outputMax[0], "60s", "max", false, t)
+	testSummarize("Extended Request", input, outputMax[1], "60s", "max", true, t)
 }
 
 func testSummarizeAlignToFrom(t *testing.T) {
@@ -650,10 +650,10 @@ func testSummarizeAlignToFrom(t *testing.T) {
 		},
 	}
 
-	testSummarize("Extended", input, outputSum[0], "45s", "sum", false, t)
-	testSummarize("Extended", input, outputSum[1], "45s", "sum", true, t)
-	testSummarize("Extended", input, outputMax[0], "45s", "max", false, t)
-	testSummarize("Extended", input, outputMax[1], "45s", "max", true, t)
+	testSummarize("AlignToFrom", input, outputSum[0], "45s", "sum", false, t)
+	testSummarize("AlignToFrom", input, outputSum[1], "45s", "sum", true, t)
+	testSummarize("AlignToFrom", input, outputMax[0], "45s", "max", false, t)
+	testSummarize("AlignToFrom", input, outputMax[1], "45s", "max", true, t)
 }
 
 func testSummarize(name string, in []models.Series, out []models.Series, intervalString, fn string, alignToFrom bool, t *testing.T) {

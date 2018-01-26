@@ -5,6 +5,7 @@ import (
 
 	"github.com/grafana/metrictank/api/models"
 	"github.com/grafana/metrictank/consolidation"
+	"github.com/grafana/metrictank/batch"
 	"github.com/grafana/metrictank/util"
 	"github.com/raintank/dur"
 	"gopkg.in/raintank/schema.v1"
@@ -41,10 +42,7 @@ func (s *FuncSummarize) Exec(cache map[Req][]models.Series) ([]models.Series, er
 		return nil, err
 	}
 
-	interval, err := dur.ParseDuration(s.intervalString)
-	if err != nil {
-		return nil, err
-	}
+	aggFunc := consolidation.GetAggFunc(consolidation.FromConsolidateBy(fn))
 
 	var alignToFromTarget string
 	if s.alignToFrom {
@@ -66,7 +64,7 @@ func (s *FuncSummarize) Exec(cache map[Req][]models.Series) ([]models.Series, er
 			newEnd = newEnd - (newEnd % interval) + interval
 		}
 
-		out, alignedEnd := summarizeValues(serie, s.fn, interval, newStart, newEnd)
+		out, alignedEnd := summarizeValues(serie, aggFunc, interval, newStart, newEnd)
 
 		if s.alignToFrom {
 			newEnd = alignedEnd
@@ -74,7 +72,7 @@ func (s *FuncSummarize) Exec(cache map[Req][]models.Series) ([]models.Series, er
 
 		output := models.Series{
 			Target:     newName(serie.Target),
-			QueryPatt:  newName(serie.QueryPatt), // Does this exist?
+			QueryPatt:  newName(serie.QueryPatt), // Should this match target?
 			Tags:       serie.Tags,
 			Datapoints: out,
 			Interval:   interval,
@@ -85,7 +83,7 @@ func (s *FuncSummarize) Exec(cache map[Req][]models.Series) ([]models.Series, er
 	return outputs, nil
 }
 
-func summarizeValues(serie models.Series, fn string, interval, start, end uint32) ([]schema.Point, uint32) {
+func summarizeValues(serie models.Series, aggFunc batch.AggFunc, interval, start, end uint32) ([]schema.Point, uint32) {
 	out := pointSlicePool.Get().([]schema.Point)
 
 	aggFunc := consolidation.GetAggFunc(consolidation.FromConsolidateBy(fn))
