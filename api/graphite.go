@@ -687,7 +687,12 @@ func (s *Server) executePlan(ctx context.Context, orgId uint32, plan expr.Plan) 
 				return nil, meta, err
 			}
 
-			series, err = s.clusterFindByTag(ctx, orgId, exprs, int64(r.From), maxSeriesPerReq-len(reqs))
+			remainingSeriesLimit := maxSeriesPerReq - len(reqs)
+			if remainingSeriesLimit <= 0 && maxSeriesPerReq > 0 {
+				// Use 1 to enable series count checking.
+				remainingSeriesLimit = 1
+			}
+			series, err = s.clusterFindByTag(ctx, orgId, exprs, int64(r.From), remainingSeriesLimit, false)
 		} else {
 			series, err = s.findSeries(ctx, orgId, []string{r.Query}, int64(r.From))
 		}
@@ -1012,7 +1017,17 @@ func (s *Server) graphiteTagFindSeries(ctx *middleware.Context, request models.G
 		return
 	}
 
-	series, err := s.clusterFindByTag(reqCtx, ctx.OrgId, expressions, request.From, maxSeriesPerReq)
+	// If limit is specified and less than the global `maxSeriesPerReq` (or `maxSeriesPerReq` is disabled),
+	// then this is a "soft" limit, meaning we stop and don't return an error. If global `maxSeriesPerReq`
+	// exists, then respect that
+	isSoftLimit := true
+	limit := request.Limit
+	if maxSeriesPerReq > 0 && (limit == 0 || limit > maxSeriesPerReq) {
+		limit = maxSeriesPerReq
+		isSoftLimit = false
+	}
+
+	series, err := s.clusterFindByTag(reqCtx, ctx.OrgId, expressions, request.From, limit, isSoftLimit)
 	if err != nil {
 		response.Write(ctx, response.WrapError(err))
 		return
@@ -1025,14 +1040,45 @@ func (s *Server) graphiteTagFindSeries(ctx *middleware.Context, request models.G
 		return
 	default:
 	}
-	seriesNames := make([]string, 0, len(series))
-	for _, serie := range series {
-		seriesNames = append(seriesNames, serie.Pattern)
+
+	var warnings []string
+	if len(series) == limit {
+		warnings = append(warnings, "Result set truncated due to limit")
 	}
-	response.Write(ctx, response.NewJson(200, seriesNames, ""))
+
+	switch request.Format {
+	case "lastts-json":
+		retval := models.GraphiteTagFindSeriesLastTsResp{Warnings: warnings}
+		retval.Series = make([]models.SeriesLastTs, 0, len(series))
+		for _, serie := range series {
+			var lastUpdate int64
+			for _, node := range serie.Series {
+				for _, ndef := range node.Defs {
+					if ndef.LastUpdate > lastUpdate {
+						lastUpdate = ndef.LastUpdate
+					}
+				}
+			}
+			retval.Series = append(retval.Series, models.SeriesLastTs{Series: serie.Pattern, Ts: lastUpdate})
+		}
+
+		response.Write(ctx, response.NewJson(200, retval, ""))
+	case "series-json":
+		seriesNames := make([]string, 0, len(series))
+		for _, serie := range series {
+			seriesNames = append(seriesNames, serie.Pattern)
+		}
+
+		if request.Meta == true {
+			retval := models.GraphiteTagFindSeriesMetaResp{Series: seriesNames, Warnings: warnings}
+			response.Write(ctx, response.NewJson(200, retval, ""))
+		} else {
+			response.Write(ctx, response.NewJson(200, seriesNames, ""))
+		}
+	}
 }
 
-func (s *Server) clusterFindByTag(ctx context.Context, orgId uint32, expressions tagquery.Expressions, from int64, maxSeries int) ([]Series, error) {
+func (s *Server) clusterFindByTag(ctx context.Context, orgId uint32, expressions tagquery.Expressions, from int64, maxSeries int, softLimit bool) ([]Series, error) {
 	data := models.IndexFindByTag{OrgId: orgId, Expr: expressions.Strings(), From: from}
 	newCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -1048,7 +1094,19 @@ func (s *Server) clusterFindByTag(ctx context.Context, orgId uint32, expressions
 		}
 
 		// 0 disables the check, so only check if maxSeriesPerReq > 0
-		if maxSeriesPerReq > 0 && len(resp.Metrics)+len(allSeries) > maxSeries {
+		if maxSeries > 0 && len(resp.Metrics)+len(allSeries) > maxSeries {
+			if softLimit {
+				remainingSpace := maxSeries - len(allSeries)
+				// Fill in up to maxSeries
+				for _, series := range resp.Metrics[:remainingSpace] {
+					allSeries = append(allSeries, Series{
+						Pattern: series.Path,
+						Node:    r.peer,
+						Series:  []idx.Node{series},
+					})
+				}
+				return allSeries, nil
+			}
 			return nil,
 				response.NewError(
 					http.StatusRequestEntityTooLarge,
