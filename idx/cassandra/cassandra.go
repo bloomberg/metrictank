@@ -645,14 +645,12 @@ func (c *CasIdx) Delete(orgId uint32, pattern string) ([]idx.Archive, error) {
 	if err != nil {
 		return defs, err
 	}
-	if c.Config.updateCassIdx {
-		for _, def := range defs {
-			err = c.deleteDef(def.Id, def.Partition)
-			if err != nil {
-				log.Errorf("cassandra-idx: %s", err.Error())
-			}
-		}
+
+	err = c.deleteDefs(defs)
+	if err != nil {
+		return nil, err
 	}
+
 	statDeleteDuration.Value(time.Since(pre))
 	return defs, err
 }
@@ -664,6 +662,18 @@ func (c *CasIdx) DeleteTagged(orgId uint32, query tagquery.Query) ([]idx.Archive
 		return nil, err
 	}
 
+	err = c.deleteDefs(defs)
+	if err != nil {
+		return nil, err
+	}
+
+	statDeleteDuration.Value(time.Since(pre))
+	return defs, err
+}
+
+func (c *CasIdx) deleteDefs(defs []idx.Archive) error {
+	var err error
+
 	if c.Config.updateCassIdx {
 		for _, def := range defs {
 			delErr := c.deleteDef(def.Id, def.Partition)
@@ -674,8 +684,7 @@ func (c *CasIdx) DeleteTagged(orgId uint32, query tagquery.Query) ([]idx.Archive
 		}
 	}
 
-	statDeleteDuration.Value(time.Since(pre))
-	return defs, err
+	return err
 }
 
 func (c *CasIdx) deleteDef(key schema.MKey, part int32) error {
