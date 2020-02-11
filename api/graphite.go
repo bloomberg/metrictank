@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/grafana/metrictank/schema"
+	"github.com/tinylib/msgp/msgp"
 	macaron "gopkg.in/macaron.v1"
 
 	"github.com/grafana/metrictank/api/middleware"
@@ -1082,16 +1083,22 @@ func (s *Server) clusterFindByTag(ctx context.Context, orgId uint32, expressions
 	data := models.IndexFindByTag{OrgId: orgId, Expr: expressions.Strings(), From: from}
 	newCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	responseChan, errorChan := s.peerQuerySpeculativeChan(newCtx, data, "clusterFindByTag", "/index/find_by_tag")
+	responseChan, errorChan := s.peerQuerySpeculativeChanGeneric(newCtx,
+		func(reqCtx context.Context, peer cluster.Node) (interface{}, error) {
+			resp := models.IndexFindByTagResp{}
+			body, err := peer.PostRaw(reqCtx, "clusterFindByTag", "/index/find_by_tag", data)
+			if body == nil || err != nil {
+				return nil, err
+			}
+			err = msgp.Decode(body, &resp)
+			body.Close()
+			return resp, err
+		})
 
 	var allSeries []Series
 
 	for r := range responseChan {
-		resp := models.IndexFindByTagResp{}
-		_, err := resp.UnmarshalMsg(r.buf)
-		if err != nil {
-			return nil, err
-		}
+		resp := r.resp.(models.IndexFindByTagResp)
 
 		// 0 disables the check, so only check if maxSeriesPerReq > 0
 		if maxSeries > 0 && len(resp.Metrics)+len(allSeries) > maxSeries {
