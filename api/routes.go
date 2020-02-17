@@ -18,6 +18,7 @@ func (s *Server) RegisterRoutes() {
 	r.Use(middleware.Tracer(s.Tracer))
 	r.Use(macaron.Renderer())
 	r.Use(middleware.OrgMiddleware(multiTenant))
+	r.Use(middleware.Logger())
 	r.Use(middleware.CorsHandler())
 	form := binding.Form
 	bind := binding.Bind
