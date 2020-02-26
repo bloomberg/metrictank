@@ -274,6 +274,7 @@ func (s *Server) renderMetrics(ctx *middleware.Context, request models.GraphiteR
 	for _, o := range out {
 		if len(o.Datapoints) != 0 {
 			noDataPoints = false
+			break
 		}
 	}
 	if noDataPoints {
@@ -734,7 +735,6 @@ func (s *Server) executePlan(ctx context.Context, orgId uint32, plan expr.Plan) 
 			}
 		}
 	}
-
 	meta.RenderStats.ResolveSeriesDuration = time.Since(pre)
 
 	select {
@@ -806,12 +806,17 @@ func (s *Server) executePlan(ctx context.Context, orgId uint32, plan expr.Plan) 
 		sort.Sort(models.SeriesByTarget(dataMap[k]))
 	}
 	meta.RenderStats.PrepareSeriesDuration = time.Since(b)
+	durToMillis := func(dur time.Duration) float64 {
+		return float64(dur.Nanoseconds()) / float64(time.Millisecond.Nanoseconds())
+	}
+	span.LogFields(traceLog.Float64("PrepareSeriesMillis", durToMillis(meta.RenderStats.PrepareSeriesDuration)))
 
 	preRun := time.Now()
 	out, err = plan.Run(dataMap)
 
 	meta.RenderStats.PlanRunDuration = time.Since(preRun)
 	planRunDuration.Value(meta.RenderStats.PlanRunDuration)
+	span.LogFields(traceLog.Float64("PlanRunMillis", durToMillis(meta.RenderStats.PlanRunDuration)))
 	return out, meta, err
 }
 
@@ -1015,7 +1020,7 @@ func (s *Server) clusterFindByTag(ctx context.Context, orgId uint32, expressions
 	data := models.IndexFindByTag{OrgId: orgId, Expr: expressions.Strings(), From: from}
 	newCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	responseChan, errorChan := s.queryAllShardsGeneric(newCtx,
+	responseChan, errorChan := s.queryAllShardsGeneric(newCtx, "clusterFindByTag",
 		func(reqCtx context.Context, peer cluster.Node) (interface{}, error) {
 			resp := models.IndexFindByTagResp{}
 			body, err := peer.PostRaw(reqCtx, "clusterFindByTag", "/index/find_by_tag", data)
