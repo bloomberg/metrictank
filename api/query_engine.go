@@ -104,7 +104,7 @@ func planRequests(now, from, to uint32, reqs *ReqMap, planMDP uint32, mpprSoft, 
 	for schemaID, reqs := range rp.single.mdpyes {
 		// Singles should be planned independently
 		for i, _ := range reqs {
-			ok = planLowestResForMDPSingles(now, reqs[i].From, reqs[i].To, uint16(schemaID), &reqs[i])
+			ok = planLowestResForMDPSingles(now, reqs[i].From, reqs[i].To, planMDP, uint16(schemaID), &reqs[i])
 			if !ok {
 				return nil, errUnSatisfiable
 			}
@@ -231,21 +231,17 @@ func planHighestResSingles(now, from, to uint32, schemaID uint16, req *models.Re
 // planLowestResForMDPSingles plans all requests of the given retention to an interval such that requests still return >=mdp/2 points (interval may be different for different retentions)
 func planLowestResForMDPSingles(now, from, to, mdp uint32, schemaID uint16, req *models.Req) bool {
 	rets := mdata.Schemas.Get(uint16(schemaID)).Retentions.Rets
-	var archive int
-	var ret conf.Retention
-	var ok bool
 	for i := len(rets) - 1; i >= 0; i-- {
 		// skip non-ready option.
 		if rets[i].Ready > from {
 			continue
 		}
-		archive, ret, ok = i, rets[i], true
 		req.Plan(i, rets[i])
 		if req.PointsFetch() >= mdp/2 {
-			break
+			return true
 		}
 	}
-	return ok
+	return false
 }
 
 // planHighestResMulti plans all requests of all retentions to the most precise, common, resolution.
