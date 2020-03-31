@@ -13,6 +13,7 @@ import (
 	"github.com/grafana/metrictank/mdata"
 	"github.com/grafana/metrictank/stats"
 	"github.com/grafana/metrictank/util"
+	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -71,37 +72,51 @@ func planRequests(now, from, to uint32, reqs *ReqMap, planMDP uint32, mpprSoft, 
 	ok, rp := false, NewReqsPlan(*reqs)
 
 	// 1) Initial parameters
+	getTimeWindowSuperSet := func(reqs ReqsByRet) (uint32, uint32) {
+		minFrom := to
+		maxTo := from
+		for _, rs := range reqs {
+			for _, r := range rs {
+				minFrom = util.Min(minFrom, r.From)
+				maxTo = util.Max(maxTo, r.To)
+			}
+		}
+		return from, to
+	}
 	for group, split := range rp.pngroups {
+		// Find the minFrom and maxTo of reqs in the same split
 		if split.mdpyes.HasData() {
-			ok = planLowestResForMDPMulti(now, from, to, planMDP, split.mdpyes)
+			groupFrom, groupTo := getTimeWindowSuperSet(split.mdpyes)
+			ok = planLowestResForMDPMulti(now, groupFrom, groupTo, planMDP, split.mdpyes)
 			if !ok {
 				return nil, errUnSatisfiable
 			}
 			rp.pngroups[group] = split
 		}
 		if split.mdpno.HasData() {
-			ok = planHighestResMulti(now, from, to, split.mdpno)
+			groupFrom, groupTo := getTimeWindowSuperSet(split.mdpno)
+			ok = planHighestResMulti(now, groupFrom, groupTo, split.mdpno)
 			if !ok {
 				return nil, errUnSatisfiable
 			}
 		}
 	}
 	for schemaID, reqs := range rp.single.mdpyes {
-		if len(reqs) == 0 {
-			continue
-		}
-		ok = planLowestResForMDPSingles(now, from, to, planMDP, uint16(schemaID), reqs)
-		if !ok {
-			return nil, errUnSatisfiable
+		// Singles should be planned independently
+		for i, _ := range reqs {
+			ok = planLowestResForMDPSingles(now, reqs[i].From, reqs[i].To, uint16(schemaID), &reqs[i])
+			if !ok {
+				return nil, errUnSatisfiable
+			}
 		}
 	}
 	for schemaID, reqs := range rp.single.mdpno {
-		if len(reqs) == 0 {
-			continue
-		}
-		ok = planHighestResSingles(now, from, to, uint16(schemaID), reqs)
-		if !ok {
-			return nil, errUnSatisfiable
+		// Singles should be planned independently
+		for i, _ := range reqs {
+			ok = planHighestResSingles(now, reqs[i].From, reqs[i].To, uint16(schemaID), &reqs[i])
+			if !ok {
+				return nil, errUnSatisfiable
+			}
 		}
 	}
 
@@ -203,24 +218,18 @@ HonoredSoft:
 }
 
 // planHighestResSingles plans all requests of the given retention to their most precise resolution (which may be different for different retentions)
-func planHighestResSingles(now, from, to uint32, schemaID uint16, reqs []models.Req) bool {
+func planHighestResSingles(now, from, to uint32, schemaID uint16, req *models.Req) bool {
 	rets := mdata.Schemas.Get(uint16(schemaID)).Retentions.Rets
 	minTTL := now - from
 	archive, ret, ok := findHighestResRet(rets, from, minTTL)
 	if ok {
-		for i := range reqs {
-			req := &reqs[i]
-			req.Plan(archive, ret)
-		}
+		req.Plan(archive, ret)
 	}
 	return ok
 }
 
 // planLowestResForMDPSingles plans all requests of the given retention to an interval such that requests still return >=mdp/2 points (interval may be different for different retentions)
-func planLowestResForMDPSingles(now, from, to, mdp uint32, schemaID uint16, reqs []models.Req) bool {
-	if len(reqs) == 0 {
-		return true
-	}
+func planLowestResForMDPSingles(now, from, to, mdp uint32, schemaID uint16, req *models.Req) bool {
 	rets := mdata.Schemas.Get(uint16(schemaID)).Retentions.Rets
 	var archive int
 	var ret conf.Retention
@@ -231,19 +240,12 @@ func planLowestResForMDPSingles(now, from, to, mdp uint32, schemaID uint16, reqs
 			continue
 		}
 		archive, ret, ok = i, rets[i], true
-		(&reqs[0]).Plan(i, rets[i])
-		if reqs[0].PointsFetch() >= mdp/2 {
+		req.Plan(i, rets[i])
+		if req.PointsFetch() >= mdp/2 {
 			break
 		}
 	}
-	if !ok {
-		return false
-	}
-	for i := range reqs {
-		req := &reqs[i]
-		req.Plan(archive, ret)
-	}
-	return true
+	return ok
 }
 
 // planHighestResMulti plans all requests of all retentions to the most precise, common, resolution.
@@ -522,7 +524,7 @@ func planToMulti(now, from, to, interval uint32, rbr ReqsByRet) {
 // * is ready for long enough to accommodate `from`
 // * has a long enough TTL, or otherwise the longest TTL
 func findHighestResRet(rets []conf.Retention, from, ttl uint32) (int, conf.Retention, bool) {
-
+	log.Infof("Searching for ttl > %d with from = %d from rets = %v", ttl, from, rets)
 	var archive int
 	var ret conf.Retention
 	var ok bool
