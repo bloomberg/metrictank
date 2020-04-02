@@ -41,7 +41,7 @@ See also:
 | aggregateLine                                                  |              | No         |
 | aggregateWithWildcards                                         |              | No         |
 | alias(seriesList, alias) seriesList                            |              | Stable     |
-| aliasByMetric                                                  |              | Stable     |
+| aliasByMetric                                                  |              | No         |
 | aliasByNode(seriesList, nodeList) seriesList                   | aliasByTags  | Stable     |
 | aliasByTags                                                    |              | No         |
 | aliasQuery                                                     |              | No         |

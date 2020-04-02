@@ -54,7 +54,6 @@ func init() {
 	funcs = map[string]funcDef{
 		"absolute":              {NewAbsolute, true},
 		"alias":                 {NewAlias, true},
-		"aliasByMetric":         {NewAliasByMetric, true},
 		"aliasByTags":           {NewAliasByNode, true},
 		"aliasByNode":           {NewAliasByNode, true},
 		"aliasSub":              {NewAliasSub, true},
