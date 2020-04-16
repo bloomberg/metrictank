@@ -105,7 +105,13 @@ func (r Req) ToModel() models.Req {
 	}
 }
 
+type TargetExpr struct {
+	ExprId *expr
+	Reqs   []Req
+}
+
 type Plan struct {
+	Targets       []TargetExpr   // Original target expressions
 	Reqs          []Req          // data that needs to be fetched before functions can be executed
 	funcs         []GraphiteFunc // top-level funcs to execute, the head of each tree for each target
 	exprs         []*expr
@@ -164,10 +170,13 @@ func NewPlan(exprs []*expr, from, to, mdp uint32, stable bool, optimizations Opt
 			PNGroup:       0, // making this explicit here for easy code grepping
 			optimizations: optimizations,
 		}
+
 		fn, reqs, err := newplan(e, context, stable, plan.Reqs)
 		if err != nil {
 			return Plan{}, err
 		}
+
+		plan.Targets = append(plan.Targets, TargetExpr{ExprId: e, Reqs: reqs[len(plan.Reqs):]})
 		plan.Reqs = reqs
 		plan.funcs = append(plan.funcs, fn)
 	}

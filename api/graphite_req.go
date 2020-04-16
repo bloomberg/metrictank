@@ -4,7 +4,9 @@ import (
 	"fmt"
 
 	"github.com/grafana/metrictank/api/models"
+	"github.com/grafana/metrictank/consolidation"
 	"github.com/grafana/metrictank/mdata"
+	"github.com/grafana/metrictank/schema"
 )
 
 // ReqMap is a map of requests of data,
@@ -160,22 +162,113 @@ func (rp ReqsPlan) PointsFetch() uint32 {
 	return cnt
 }
 
+type ReqKey struct {
+	MKey         schema.MKey
+	Target       string
+	Pattern      string
+	From         uint32
+	To           uint32
+	MaxPoints    uint32
+	RawInterval  uint32
+	Consolidator consolidation.Consolidator
+	ConsReq      consolidation.Consolidator
+	SchemaId     uint16
+	AggId        uint16
+	Archive      uint8
+	ArchInterval uint32
+	TTL          uint32
+	OutInterval  uint32
+	AggNum       uint32
+}
+
+func KeyFromReq(req models.Req) ReqKey {
+	return ReqKey{
+		MKey:         req.MKey,
+		Target:       req.Target,
+		Pattern:      req.Pattern,
+		From:         req.From,
+		To:           req.To,
+		MaxPoints:    req.MaxPoints,
+		RawInterval:  req.RawInterval,
+		Consolidator: req.Consolidator,
+		ConsReq:      req.ConsReq,
+		SchemaId:     req.SchemaId,
+		AggId:        req.AggId,
+		Archive:      req.Archive,
+		ArchInterval: req.ArchInterval,
+		TTL:          req.TTL,
+		OutInterval:  req.OutInterval,
+		AggNum:       req.AggNum,
+	}
+}
+
+type seenMap map[ReqKey]models.Req
+
+func (s *seenMap) Add(req models.Req) bool {
+	key := KeyFromReq(req)
+	if _, ok := (*s)[key]; !ok {
+		(*s)[key] = req
+		return true
+	}
+	return false
+}
+
+func (rp ReqsPlan) PointsFetchDeduped() uint32 {
+	var cnt uint32
+	seen := seenMap(make(map[ReqKey]models.Req))
+	for _, rbr := range rp.single.mdpyes {
+		for _, req := range rbr {
+			if seen.Add(req) {
+				cnt += req.PointsFetch()
+			}
+		}
+	}
+	for _, rbr := range rp.single.mdpno {
+		for _, req := range rbr {
+			if seen.Add(req) {
+				cnt += req.PointsFetch()
+			}
+		}
+	}
+	for _, data := range rp.pngroups {
+		for _, rbr := range data.mdpyes {
+			for _, req := range rbr {
+				if seen.Add(req) {
+					cnt += req.PointsFetch()
+				}
+			}
+		}
+		for _, rbr := range data.mdpno {
+			for _, req := range rbr {
+				if seen.Add(req) {
+					cnt += req.PointsFetch()
+				}
+			}
+		}
+	}
+	return cnt
+}
+
 // Dump provides a human readable string representation of the ReqsPlan
 func (rp ReqsPlan) Dump() string {
 	out := fmt.Sprintf("ReqsPlan (%d entries):\n", rp.cnt)
+	out += fmt.Sprintf("PointsFetch = %d, PointsFetchDedup = %d\n", rp.PointsFetch(), rp.PointsFetchDeduped())
+	seen := seenMap(make(map[ReqKey]models.Req))
 	out += "  # Groups:\n"
 	for i, data := range rp.pngroups {
 		out += fmt.Sprintf("    ## group %d\n", i)
 		out += "      ### MDP-yes:\n"
 		for schemaID, reqs := range data.mdpyes {
 			for _, req := range reqs {
-				out += fmt.Sprintf("        [%d] %s\n", schemaID, req.DebugString())
+				isNew := seen.Add(req)
+				out += fmt.Sprintf("        [%d] %s, duped = %t\n", schemaID, req.DebugString(), !isNew)
 			}
 		}
 		out += "      ### MDP-no:\n"
 		for schemaID, reqs := range data.mdpno {
 			for _, req := range reqs {
-				out += fmt.Sprintf("        [%d] %s\n", schemaID, req.DebugString())
+				isNew := seen.Add(req)
+				out += fmt.Sprintf("        [%d] %s, duped = %t\n", schemaID, req.DebugString(), !isNew)
 			}
 		}
 	}
@@ -183,13 +276,15 @@ func (rp ReqsPlan) Dump() string {
 	out += "   ## MDP-yes:\n"
 	for schemaID, reqs := range rp.single.mdpyes {
 		for _, req := range reqs {
-			out += fmt.Sprintf("    [%d] %s\n", schemaID, req.DebugString())
+			isNew := seen.Add(req)
+			out += fmt.Sprintf("    [%d] %s, duped = %t\n", schemaID, req.DebugString(), !isNew)
 		}
 	}
 	out += "    ## MDP-no:\n"
 	for schemaID, reqs := range rp.single.mdpno {
 		for _, req := range reqs {
-			out += fmt.Sprintf("    [%d] %s\n", schemaID, req.DebugString())
+			isNew := seen.Add(req)
+			out += fmt.Sprintf("    [%d] %s, duped = %t\n", schemaID, req.DebugString(), !isNew)
 		}
 	}
 	return out
@@ -239,6 +334,44 @@ func (rp ReqsPlan) List() []models.Req {
 		}
 		for _, reqs := range data.mdpyes {
 			l = append(l, reqs...)
+		}
+	}
+	return l
+}
+
+// List returns the requests contained within the plan as a slice
+func (rp ReqsPlan) ListDeduped() []models.Req {
+	l := make([]models.Req, 0, rp.cnt)
+	seen := seenMap(make(map[ReqKey]models.Req))
+
+	for _, reqs := range rp.single.mdpno {
+		for _, req := range reqs {
+			if seen.Add(req) {
+				l = append(l, req)
+			}
+		}
+	}
+	for _, reqs := range rp.single.mdpyes {
+		for _, req := range reqs {
+			if seen.Add(req) {
+				l = append(l, req)
+			}
+		}
+	}
+	for _, data := range rp.pngroups {
+		for _, reqs := range data.mdpno {
+			for _, req := range reqs {
+				if seen.Add(req) {
+					l = append(l, req)
+				}
+			}
+		}
+		for _, reqs := range data.mdpyes {
+			for _, req := range reqs {
+				if seen.Add(req) {
+					l = append(l, req)
+				}
+			}
 		}
 	}
 	return l

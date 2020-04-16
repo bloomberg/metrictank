@@ -152,8 +152,8 @@ func planRequests(now uint32, reqs *ReqMap, planMDP uint32, mpprSoft, mpprHard i
 		}
 		sort.Slice(pngroupsByLen, func(i, j int) bool { return rp.pngroups[pngroupsByLen[i]].Len() < rp.pngroups[pngroupsByLen[j]].Len() })
 
-		for rp.PointsFetch() > uint32(mpprSoft) && progress {
-			log.Infof("Trying to reduce %d points to <%d", rp.PointsFetch(), uint32(mpprSoft))
+		for rp.PointsFetchDeduped() > uint32(mpprSoft) && progress {
+			log.Infof("Trying to reduce %d points to <%d", rp.PointsFetchDeduped(), uint32(mpprSoft))
 			progress = false
 			for _, groupID := range pngroupsByLen {
 				data := rp.pngroups[groupID]
@@ -162,7 +162,7 @@ func planRequests(now uint32, reqs *ReqMap, planMDP uint32, mpprSoft, mpprHard i
 					ok := reduceResMulti(now, groupFrom, groupTo, data.mdpno)
 					if ok {
 						progress = true
-						if rp.PointsFetch() <= uint32(mpprSoft) {
+						if rp.PointsFetchDeduped() <= uint32(mpprSoft) {
 							goto HonoredSoft
 						}
 					}
@@ -174,9 +174,6 @@ func planRequests(now uint32, reqs *ReqMap, planMDP uint32, mpprSoft, mpprHard i
 					ok = reduceResSingle(now, uint16(schemaID), &reqs[i])
 					if ok {
 						progress = true
-						if rp.PointsFetch() <= uint32(mpprSoft) {
-							goto HonoredSoft
-						}
 					}
 				}
 			}
@@ -185,7 +182,7 @@ func planRequests(now uint32, reqs *ReqMap, planMDP uint32, mpprSoft, mpprHard i
 HonoredSoft:
 
 	// 3) honor max-points-per-req-hard
-	if mpprHard > 0 && int(rp.PointsFetch()) > mpprHard {
+	if mpprHard > 0 && int(rp.PointsFetchDeduped()) > mpprHard {
 		return nil, errMaxPointsPerReq
 
 	}
@@ -213,7 +210,7 @@ HonoredSoft:
 			}
 		}
 	}
-	reqRenderPointsFetched.ValueUint32(rp.PointsFetch())
+	reqRenderPointsFetched.ValueUint32(rp.PointsFetchDeduped())
 	reqRenderPointsReturned.ValueUint32(rp.PointsReturn(planMDP))
 
 	log.Infof("Plan = %s", rp.Dump())
@@ -501,7 +498,6 @@ func planToMulti(now, from, to, interval uint32, rbr ReqsByRet) {
 // * is ready for long enough to accommodate `from`
 // * has a long enough TTL, or otherwise the longest TTL
 func findHighestResRet(rets []conf.Retention, from, ttl uint32) (int, conf.Retention, bool) {
-	log.Infof("Searching for ttl > %d with from = %d from rets = %v", ttl, from, rets)
 	var archive int
 	var ret conf.Retention
 	var ok bool
