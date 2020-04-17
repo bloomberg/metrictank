@@ -118,6 +118,7 @@ func init() {
 		"sum":                   {NewAggregateConstructor("sum", crossSeriesSum), true},
 		"sumSeries":             {NewAggregateConstructor("sum", crossSeriesSum), true},
 		"summarize":             {NewSummarize, true},
+		"timeShift":             {NewTimeShift, true},
 		"transformNull":         {NewTransformNull, true},
 	}
 }
