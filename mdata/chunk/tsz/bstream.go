@@ -177,7 +177,8 @@ func (b *bstream) readBits(nbits int) (uint64, error) {
 
 // MarshalBinary implements the encoding.BinaryMarshaler interface
 func (b *bstream) MarshalBinary() ([]byte, error) {
-	buf := new(bytes.Buffer)
+	underBuf := make([]byte, 0, len(b.stream)+2)
+	buf := bytes.NewBuffer(underBuf)
 	err := binary.Write(buf, binary.BigEndian, b.count)
 	if err != nil {
 		return nil, err

@@ -19,6 +19,7 @@ import (
 	"github.com/grafana/metrictank/api/response"
 	"github.com/grafana/metrictank/cluster"
 	"github.com/grafana/metrictank/expr/tagquery"
+	"github.com/grafana/metrictank/mdata/chunk/tsz"
 	"github.com/grafana/metrictank/stats"
 	"github.com/grafana/metrictank/tracing"
 	log "github.com/sirupsen/logrus"
@@ -380,6 +381,52 @@ func (s *Server) getData(ctx *middleware.Context, request models.GetData) {
 		return
 	}
 	response.Write(ctx, response.NewMsgp(200, &models.GetDataRespV1{Stats: ss, Series: series}))
+}
+
+func (s *Server) getRawData(ctx *middleware.Context, request models.GetData) {
+	var ss models.StorageStats
+	// TODO - we can probably save a lot of work by working directly on the chunks up until this point
+	series, err := s.getTargetsLocal(ctx.Req.Context(), &ss, request.Requests)
+	if err != nil {
+		// the only errors returned are from us catching panics, so we should treat them
+		// all as internalServerErrors
+		log.Errorf("HTTP getRawData() %s", err.Error())
+		response.Write(ctx, response.WrapError(err))
+		return
+	}
+	rawSeries := make([]models.SeriesRaw, 0, len(series))
+
+	for _, s := range series {
+		raw := models.SeriesRaw{
+			Target:       s.Target,
+			Tags:         s.Tags,
+			Interval:     s.Interval,
+			QueryPatt:    s.QueryPatt,
+			QueryFrom:    s.QueryFrom,
+			QueryTo:      s.QueryTo,
+			QueryCons:    s.QueryCons,
+			Consolidator: s.Consolidator,
+			QueryMDP:     s.QueryMDP,
+			QueryPNGroup: s.QueryPNGroup,
+			Meta:         s.Meta,
+		}
+
+		chunk := tsz.NewSeriesLongSized(s.QueryFrom, len(s.Datapoints))
+
+		for _, p := range s.Datapoints {
+			chunk.PushUnsafe(p.Ts, p.Val)
+		}
+
+		raw.Datapoints, err = chunk.MarshalBinary()
+		if err != nil {
+			log.Errorf("HTTP getRawData() %s", err.Error())
+			response.Write(ctx, response.WrapError(err))
+			return
+		}
+		rawSeries = append(rawSeries, raw)
+	}
+
+	response.Write(ctx, response.NewMsgp(200, &models.GetDataRespRawV1{Stats: ss, Series: rawSeries}))
 }
 
 func (s *Server) indexDelete(ctx *middleware.Context, req models.IndexDelete) {

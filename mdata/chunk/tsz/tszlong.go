@@ -40,7 +40,18 @@ func NewSeriesLong(t0 uint32) *SeriesLong {
 		tDelta:  60,
 	}
 	return &s
+}
 
+func NewSeriesLongSized(t0 uint32, estimatedPoints int) *SeriesLong {
+	s := SeriesLong{
+		T0:      t0,
+		leading: ^uint8(0),
+		tDelta:  60,
+	}
+
+	// Estimate 4 bytes per point
+	s.bw.stream = make([]byte, 0, estimatedPoints*4)
+	return &s
 }
 
 // Bytes value of the series stream
@@ -64,7 +75,15 @@ func (s *SeriesLong) Finish() {
 func (s *SeriesLong) Push(t uint32, v float64) {
 	s.Lock()
 	defer s.Unlock()
+	s.pushUnderLock(t, v)
+}
 
+// Push a timestamp and value to the series, *not* concurrency-safe.
+func (s *SeriesLong) PushUnsafe(t uint32, v float64) {
+	s.pushUnderLock(t, v)
+}
+
+func (s *SeriesLong) pushUnderLock(t uint32, v float64) {
 	var first bool
 
 	tDelta := t - s.T
@@ -336,7 +355,15 @@ func (it *IterLong) Err() error {
 
 // MarshalBinary implements the encoding.BinaryMarshaler interface
 func (s *SeriesLong) MarshalBinary() ([]byte, error) {
-	buf := new(bytes.Buffer)
+
+	bStream, err := s.bw.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+
+	estimatedSize := len(bStream) + 32
+	underBuf := make([]byte, 0, estimatedSize)
+	buf := bytes.NewBuffer(underBuf)
 	em := &errMarshal{w: buf}
 	em.write(s.T0)
 	em.write(s.leading)
@@ -344,10 +371,6 @@ func (s *SeriesLong) MarshalBinary() ([]byte, error) {
 	em.write(s.tDelta)
 	em.write(s.trailing)
 	em.write(s.val)
-	bStream, err := s.bw.MarshalBinary()
-	if err != nil {
-		return nil, err
-	}
 	em.write(bStream)
 	if em.err != nil {
 		return nil, em.err

@@ -38,6 +38,7 @@ func (s *Server) RegisterRoutes() {
 	r.Post("/cluster", bind(models.ClusterMembers{}), s.postClusterMembers)
 
 	r.Combo("/getdata", ready, bind(models.GetData{})).Get(s.getData).Post(s.getData)
+	r.Combo("/getrawdata", ready, bind(models.GetData{})).Get(s.getRawData).Post(s.getRawData)
 
 	// Intra-cluster (inter-node) communication
 	r.Combo("/index/find", ready, bind(models.IndexFind{})).Get(s.indexFind).Post(s.indexFind)

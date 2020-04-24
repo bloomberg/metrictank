@@ -30,6 +30,12 @@ type GetDataRespV1 struct {
 	Series []Series
 }
 
+//go:generate msgp
+type GetDataRespRawV1 struct {
+	Stats  StorageStats
+	Series []SeriesRaw
+}
+
 type MetricsDeleteResp struct {
 	DeletedDefs int `json:"deletedDefs"`
 }

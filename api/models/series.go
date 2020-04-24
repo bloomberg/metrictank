@@ -32,6 +32,21 @@ type Series struct {
 	Datapoints   []schema.Point
 }
 
+type SeriesRaw struct {
+	Target       string            // for fetched data, set from models.Req.Target, i.e. the metric graphite key. for function output, whatever should be shown as target string (legend)
+	Tags         map[string]string // Must be set initially via call to `SetTags()`
+	Interval     uint32
+	QueryPatt    string                     // to tie series back to request it came from. e.g. foo.bar.*, or if series outputted by func it would be e.g. scale(foo.bar.*,0.123456)
+	QueryFrom    uint32                     // to tie series back to request it came from
+	QueryTo      uint32                     // to tie series back to request it came from
+	QueryCons    consolidation.Consolidator // to tie series back to request it came from (may be 0 to mean use configured default)
+	Consolidator consolidation.Consolidator // consolidator to actually use (for fetched series this may not be 0, default must be resolved. if series created by function, may be 0)
+	QueryMDP     uint32                     // to tie series back to request it came from
+	QueryPNGroup PNGroup                    // to tie series back to request it came from
+	Meta         SeriesMeta                 // note: this series could be a "just fetched" series, or one derived from many other series
+	Datapoints   []byte
+}
+
 // SeriesMeta counts the number of series for each set of meta properties
 // note: it's illegal for SeriesMeta to include multiple entries that include the same properties
 type SeriesMeta []SeriesMetaProperties
