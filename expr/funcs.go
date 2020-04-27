@@ -124,6 +124,7 @@ func init() {
 		"sum":                   {NewAggregateConstructor("sum"), true},
 		"sumSeries":             {NewAggregateConstructor("sum"), true},
 		"summarize":             {NewSummarize, true},
+		"timeShift":             {NewTimeShift, true},
 		"transformNull":         {NewTransformNull, true},
 		"unique":                {NewUnique, true},
 	}
