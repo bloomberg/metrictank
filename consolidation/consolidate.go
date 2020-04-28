@@ -28,6 +28,15 @@ func ConsolidateNudged(points []schema.Point, interval, maxDataPoints uint32, co
 	return points, interval * aggNum
 }
 
+func ConsolidateNudgedCopy(points []schema.Point, interval, maxDataPoints uint32, consolidator Consolidator) ([]schema.Point, uint32) {
+	aggNum := AggEvery(uint32(len(points)), maxDataPoints)
+	pointsCopy := make([]schema.Point, len(points))
+	copy(pointsCopy, points)
+	pointsCopy = nudgeMaybe(pointsCopy, aggNum, interval)
+	pointsCopy = Consolidate(pointsCopy, aggNum, consolidator)
+	return pointsCopy, interval * aggNum
+}
+
 // Consolidate consolidates `in`, aggNum points at a time via the given function
 // note: the returned slice repurposes in's backing array.
 // it will always aggregate aggNum-sized groups of points together, with the timestamp of the last of them, and it always starts at the beginning,
