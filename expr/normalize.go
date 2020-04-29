@@ -25,11 +25,27 @@ func Normalize(dataMap DataMap, in []models.Series) []models.Series {
 		intervals = append(intervals, s.Interval)
 	}
 	lcm := util.Lcm(intervals)
+
 	for i, s := range in {
 		if s.Interval != lcm {
 			in[i] = NormalizeTo(dataMap, s, lcm)
 		}
 	}
+
+	// Some functions (e.g. summarize) can break the expectations of alignment / num datapoints
+	// that we have here, so do another final pass to align timestamps based (arbitrarily) on our first series
+	targetDps := in[0].Datapoints
+	for i := 1; i < len(in); i++ {
+		// Add dps if needed
+		for len(in[i].Datapoints) < len(targetDps) {
+			dp := targetDps[len(in[i].Datapoints)]
+			dp.Val = math.NaN()
+			in[i].Datapoints = append(in[i].Datapoints, dp)
+		}
+		// Trim DPs if needed
+		in[i].Datapoints = in[i].Datapoints[:len(targetDps)]
+	}
+
 	return in
 }
 
@@ -79,7 +95,8 @@ func NormalizeTo(dataMap DataMap, in models.Series, interval uint32) models.Seri
 	// (it breaches `to`, and may have more points than other series it needs to be combined with)
 	// thus, we also need to potentially trim points from the back until the last point has the same Ts as a canonical series would
 
-	for ts := align.ForwardIfNotAligned(in.Datapoints[0].Ts, interval) - interval + in.Interval; ts < in.Datapoints[0].Ts; ts += interval {
+	startTs := align.ForwardIfNotAligned(in.Datapoints[0].Ts, interval) - interval + in.Interval
+	for ts := startTs; ts < in.Datapoints[0].Ts; ts += in.Interval {
 		datapoints = append(datapoints, schema.Point{Val: math.NaN(), Ts: ts})
 	}
 
