@@ -193,10 +193,15 @@ func (b *bstream) MarshalBinary() ([]byte, error) {
 // UnmarshalBinary implements the encoding.BinaryUnmarshaler interface
 func (b *bstream) UnmarshalBinary(bIn []byte) error {
 	buf := bytes.NewReader(bIn)
+	return b.UnmarshalBinaryFrom(buf)
+}
+
+func (b *bstream) UnmarshalBinaryFrom(buf *bytes.Reader) error {
 	err := binary.Read(buf, binary.BigEndian, &b.count)
 	if err != nil {
 		return err
 	}
 	b.stream = make([]byte, buf.Len())
-	return binary.Read(buf, binary.BigEndian, &b.stream)
+	_, err = io.ReadFull(buf, b.stream)
+	return err
 }

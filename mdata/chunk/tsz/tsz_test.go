@@ -8,6 +8,40 @@ import (
 var T uint32
 var V float64
 
+func TestMarshal(t *testing.T) {
+	s := NewSeriesLong(0)
+	for i := 0; i < 10; i++ {
+		s.Push(uint32(i), float64(i))
+	}
+
+	sBin, err := s.MarshalBinary()
+	if err != nil {
+		t.Fatalf("Failed to encode series: %v", err)
+	}
+
+	sCopy := NewSeriesLong(10)
+	sCopy.UnmarshalBinary(sBin)
+
+	iter := sCopy.Iter()
+
+	expected := 0
+
+	for iter.Next() {
+		ts, val := iter.Values()
+		if ts != uint32(expected) {
+			t.Fatalf("Failed at index %d, expected TS %d got %d", expected, expected, ts)
+		}
+		if val != float64(expected) {
+			t.Fatalf("Failed at index %d, expected Val %d got %f", expected, expected, val)
+		}
+		expected++
+	}
+
+	if expected != 10 {
+		t.Fatalf("Expected %d points, got %d", 10, expected)
+	}
+}
+
 func BenchmarkPushSeries4h(b *testing.B) {
 	s := NewSeries4h(0)
 	N := uint32(b.N)

@@ -169,6 +169,13 @@ func (s *SeriesLong) Iter() *IterLong {
 	return iter
 }
 
+// UnsafeIter generates an iterator using this chunk. It is not concurrency-safe and *destroys* the chunk
+func (s *SeriesLong) UnsafeIter() *IterLong {
+	finishV2(&s.bw)
+	iter, _ := bstreamIteratorLong(s.T0, &s.bw)
+	return iter
+}
+
 // IterLong lets you iterate over a series.  It is not concurrency-safe.
 type IterLong struct {
 	T0 uint32
@@ -388,14 +395,10 @@ func (s *SeriesLong) UnmarshalBinary(b []byte) error {
 	em.read(&s.tDelta)
 	em.read(&s.trailing)
 	em.read(&s.val)
-	outBuf := make([]byte, buf.Len())
-	em.read(outBuf)
-	err := s.bw.UnmarshalBinary(outBuf)
-	if err != nil {
-		return err
-	}
+
 	if em.err != nil {
 		return em.err
 	}
-	return nil
+
+	return s.bw.UnmarshalBinaryFrom(buf)
 }
