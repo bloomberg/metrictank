@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/grafana/metrictank/schema"
+	log "github.com/sirupsen/logrus"
 )
 
 // ConsolidateContext wraps a Consolidate() call with a context.Context condition
@@ -43,6 +44,11 @@ func ConsolidateNudgedCopy(points []schema.Point, interval, maxDataPoints uint32
 // possibly having a point at the end that didn't incorporate as much data
 func Consolidate(in []schema.Point, aggNum uint32, consolidator Consolidator) []schema.Point {
 	num := int(aggNum)
+
+	if consolidator == None {
+		log.Warn("Consolidate: told to use None consolidator. Defaulting to Avg")
+		consolidator = Avg
+	}
 	aggFunc := GetAggFunc(consolidator)
 
 	// let's see if the input data is a perfect fit for the requested aggNum
