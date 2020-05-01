@@ -71,20 +71,9 @@ func Fix(in []schema.Point, from, to, interval uint32) []schema.Point {
 		// the requested range is too narrow for the requested interval
 		return []schema.Point{}
 	}
-	// 3 attempts to get a sufficiently sized slice from the pool. if it fails, allocate a new one.
-	var out []schema.Point
+
 	neededCap := int((last-first)/interval + 1)
-	for attempt := 1; attempt < 4; attempt++ {
-		candidate := pointSlicePool.Get().([]schema.Point)
-		if cap(candidate) >= neededCap {
-			out = candidate[:neededCap]
-			break
-		}
-		pointSlicePool.Put(candidate)
-	}
-	if out == nil {
-		out = make([]schema.Point, neededCap)
-	}
+	out := expr.GetPooledSliceAtLeastSize(neededCap)[:neededCap]
 
 	// i iterates in. o iterates out. t is the ts we're looking to fill.
 	for t, i, o := first, 0, -1; t <= last; t += interval {
@@ -188,7 +177,7 @@ func (s *Server) getTargets(ctx context.Context, ss *models.StorageStats, reqs [
 		wg.Add(1)
 		go func() {
 			// all errors returned are *response.Error.
-			series, err := s.getTargetsRemote(getCtx, ss, remoteReqs)
+			series, err := s.getRawTargetsRemote(getCtx, ss, remoteReqs)
 			if err != nil {
 				cancel()
 			}
@@ -212,6 +201,72 @@ func (s *Server) getTargets(ctx context.Context, ss *models.StorageStats, reqs [
 	}
 	log.Debugf("DP getTargets: %d series found on cluster", len(out))
 	return out, nil
+}
+
+// getRawTargetsRemote issues the requests - keyed by node name - on other nodes
+func (s *Server) getRawTargetsRemote(ctx context.Context, ss *models.StorageStats, remoteReqs map[string][]models.Req) ([]models.Series, error) {
+
+	allPeers, err := cluster.MembersForSpeculativeQuery()
+	if err != nil {
+		return nil, err
+	}
+
+	// will contain all replicas for each shardgroup
+	// (though typically only one replica is used per shardgroup unless spec-exec kicks in)
+	requiredPeers := make(map[int32][]cluster.Node)
+	shardReqs := make(map[int32][]models.Req)
+
+	// Note: we can expect remoteReqs to possibly have multiple node string keys that are part of the same shardgroup.
+	// Why? Because a request may need multiple series lookups, and issue multiple, distinct find/find_by_tag calls, each of which may end up using different replicas
+	// within the same shardgroup (due to changing priorities, spec-exec, etc)>
+	// Thus here we categorize all requests into groups per shard ID, rather than by hostname.
+
+	for _, nodeReqs := range remoteReqs {
+		shardID := nodeReqs[0].Node.GetPartitions()[0]
+		peers := allPeers[shardID]
+		if len(peers) == 0 {
+			return nil, fmt.Errorf("Shard %d has gone unavailable before /getrawdata", shardID)
+		}
+		requiredPeers[shardID] = peers
+		shardReqs[shardID] = append(shardReqs[shardID], nodeReqs...)
+	}
+
+	rCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	resultChan, errorChan := queryPeers(rCtx, requiredPeers, "getTargetsRemote", func(ctx context.Context, node cluster.Node) (interface{}, error) {
+		var resp models.GetDataRespRawV1
+		reqs, ok := shardReqs[node.GetPartitions()[0]]
+		if !ok {
+			log.Warnf("DP Unexpected shard group, node = %q", node)
+			// Return empty response, no error
+			return resp, nil
+		}
+		body, err := node.PostRaw(ctx, "getTargetsRemote", "/getrawdata", models.GetData{Requests: reqs})
+		if body == nil || err != nil {
+			return nil, err
+		}
+		err = msgp.Decode(body, &resp)
+		body.Close()
+		return resp, err
+	})
+
+	out := make([]models.Series, 0)
+	for r := range resultChan {
+		resp := r.resp.(models.GetDataRespRawV1)
+		log.Debugf("DP getTargetsRemote: %s returned %d series", r.peer.GetName(), len(resp.Series))
+		ss.Add(&resp.Stats)
+		for i := range resp.Series {
+			// Heuristic, 3 bytes per dp
+			expectedSize := len(resp.Series[i].Datapoints) / 3
+			dps := expr.GetPooledSliceAtLeastSize(expectedSize)
+			out = append(out, resp.Series[i].ToSeries(dps))
+		}
+	}
+
+	log.Debugf("DP getTargetsRemote: total of %d series found on peers", len(out))
+	err = <-errorChan
+	return out, err
 }
 
 // getTargetsRemote issues the requests - keyed by node name - on other nodes

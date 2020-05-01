@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/grafana/metrictank/mdata/chunk/tsz"
+
 	"github.com/grafana/metrictank/consolidation"
 	"github.com/grafana/metrictank/expr/tagquery"
 	"github.com/grafana/metrictank/mdata"
@@ -45,6 +47,37 @@ type SeriesRaw struct {
 	QueryPNGroup PNGroup                    // to tie series back to request it came from
 	Meta         SeriesMeta                 // note: this series could be a "just fetched" series, or one derived from many other series
 	Datapoints   []byte
+}
+
+// ToSeries returns a Series computed from this SeriesRaw
+func (s SeriesRaw) ToSeries(workspace []schema.Point) Series {
+	ret := Series{
+		Target:       s.Target,
+		Tags:         s.Tags,
+		Interval:     s.Interval,
+		QueryPatt:    s.QueryPatt,
+		QueryFrom:    s.QueryFrom,
+		QueryTo:      s.QueryTo,
+		QueryCons:    s.QueryCons,
+		Consolidator: s.Consolidator,
+		QueryMDP:     s.QueryMDP,
+		QueryPNGroup: s.QueryPNGroup,
+		Meta:         s.Meta,
+	}
+
+	chunk := tsz.NewSeriesLong(0)
+	chunk.UnmarshalBinary(s.Datapoints)
+	iter := chunk.UnsafeIter()
+
+	dps := workspace
+	for iter.Next() {
+		t, v := iter.Values()
+		dps = append(dps, schema.Point{Ts: t, Val: v})
+	}
+
+	ret.Datapoints = dps
+
+	return ret
 }
 
 // SeriesMeta counts the number of series for each set of meta properties
