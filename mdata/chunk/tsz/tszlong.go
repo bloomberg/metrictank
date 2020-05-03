@@ -362,13 +362,7 @@ func (it *IterLong) Err() error {
 
 // MarshalBinary implements the encoding.BinaryMarshaler interface
 func (s *SeriesLong) MarshalBinary() ([]byte, error) {
-
-	bStream, err := s.bw.MarshalBinary()
-	if err != nil {
-		return nil, err
-	}
-
-	estimatedSize := len(bStream) + 32
+	estimatedSize := len(s.bw.stream) + 32
 	underBuf := make([]byte, 0, estimatedSize)
 	buf := bytes.NewBuffer(underBuf)
 	em := &errMarshal{w: buf}
@@ -378,11 +372,11 @@ func (s *SeriesLong) MarshalBinary() ([]byte, error) {
 	em.write(s.tDelta)
 	em.write(s.trailing)
 	em.write(s.val)
-	em.write(bStream)
 	if em.err != nil {
 		return nil, em.err
 	}
-	return buf.Bytes(), nil
+	err := s.bw.MarshalBinaryInto(buf)
+	return buf.Bytes(), err
 }
 
 // UnmarshalBinary implements the encoding.BinaryUnmarshaler interface
