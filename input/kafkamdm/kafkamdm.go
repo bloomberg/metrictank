@@ -362,28 +362,28 @@ func (k *KafkaMdm) Stop() {
 }
 
 func (k *KafkaMdm) trackStats(topic string, partition int32) {
-	ticker := time.NewTicker(time.Second)
 	kafkaStats := kafkaStats[partition]
 	for {
 		select {
 		case <-k.shutdown:
-			ticker.Stop()
 			return
-		case ts := <-ticker.C:
-			currentOffset := int64(kafkaStats.Offset.Peek())
-			newest, err := k.tryGetOffset(topic, partition, sarama.OffsetNewest, 1, 0)
-			if err != nil {
-				log.Errorf("kafkamdm: %s", err.Error())
-				continue
-			}
-			kafkaStats.LogSize.Set(int(newest))
-			lag := int(newest - currentOffset)
-			kafkaStats.Lag.Set(lag)
-			k.lagMonitor.StoreOffsets(partition, currentOffset, newest, ts)
-			kafkaStats.Priority.Set(k.lagMonitor.GetPartitionPriority(partition))
-			if cluster.Manager != nil {
-				kafkaStats.Ready.Set(cluster.Manager.IsReady())
-			}
+		default:
+		}
+		time.Sleep(time.Second)
+		ts := time.Now()
+		currentOffset := int64(kafkaStats.Offset.Peek())
+		newest, err := k.tryGetOffset(topic, partition, sarama.OffsetNewest, 1, 0)
+		if err != nil {
+			log.Errorf("kafkamdm: %s", err.Error())
+			continue
+		}
+		kafkaStats.LogSize.Set(int(newest))
+		lag := int(newest - currentOffset)
+		kafkaStats.Lag.Set(lag)
+		k.lagMonitor.StoreOffsets(partition, currentOffset, newest, ts)
+		kafkaStats.Priority.Set(k.lagMonitor.GetPartitionPriority(partition))
+		if cluster.Manager != nil {
+			kafkaStats.Ready.Set(cluster.Manager.IsReady())
 		}
 	}
 }
