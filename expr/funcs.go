@@ -87,6 +87,7 @@ func init() {
 		"highestCurrent":        {NewHighestLowestConstructor("current", true), true},
 		"highestMax":            {NewHighestLowestConstructor("max", true), true},
 		"integral":              {NewIntegral, true},
+		"invert":                {NewInvert, true},
 		"isNonNull":             {NewIsNonNull, true},
 		"keepLastValue":         {NewKeepLastValue, true},
 		"lowest":                {NewHighestLowestConstructor("", false), true},
@@ -99,6 +100,7 @@ func init() {
 		"min":                   {NewAggregateConstructor("min"), true},
 		"minimumAbove":          {NewFilterSeriesConstructor("min", ">"), true},
 		"minimumBelow":          {NewFilterSeriesConstructor("min", "<="), true},
+		"minMax":                {NewMinMax, true},
 		"minSeries":             {NewAggregateConstructor("min"), true},
 		"multiplySeries":        {NewAggregateConstructor("multiply"), true},
 		"movingAverage":         {NewMovingAverage, false},
@@ -123,6 +125,7 @@ func init() {
 		"sum":                   {NewAggregateConstructor("sum"), true},
 		"sumSeries":             {NewAggregateConstructor("sum"), true},
 		"summarize":             {NewSummarize, true},
+		"timeShift":             {NewTimeShift, true},
 		"transformNull":         {NewTransformNull, true},
 		"unique":                {NewUnique, true},
 	}
