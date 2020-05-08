@@ -1066,8 +1066,12 @@ func (m *UnpartitionedMemoryIdx) FindByTag(orgId uint32, query tagquery.Query) [
 
 	queryCtx := NewTagQueryContext(query)
 
+	preLock := time.Now()
+
 	m.RLock()
 	defer m.RUnlock()
+
+	postLock := time.Now()
 
 	var enricher *metaTagEnricher
 	var mtr *metaTagRecords
@@ -1113,6 +1117,16 @@ func (m *UnpartitionedMemoryIdx) FindByTag(orgId uint32, query tagquery.Query) [
 	for _, v := range byPath {
 		results[i] = *v
 		i++
+	}
+
+	endTime := time.Now()
+
+	lockHoldTime := endTime.Sub(postLock)
+	lockWaitTime := postLock.Sub(preLock)
+	if lockHoldTime > time.Duration(500)*time.Millisecond {
+		log.Infof("Long findByTag: lockWaitTime = %v, lockHoldTime = %v, expr = '%v'", lockWaitTime, lockHoldTime, query.Expressions.Strings())
+	} else if lockWaitTime > time.Duration(250)*time.Millisecond {
+		log.Infof("Long Blocked findByTag: lockWaitTime = %v, lockHoldTime = %v, expr = '%v'", lockWaitTime, lockHoldTime, query.Expressions.Strings())
 	}
 
 	return results
