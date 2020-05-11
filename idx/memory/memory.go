@@ -147,6 +147,34 @@ func New() MemoryIndex {
 	return NewUnpartitionedMemoryIdx()
 }
 
+type timedRLocker struct {
+	lock              *sync.RWMutex
+	preLock, postLock time.Time
+}
+
+func acquireTimedLock(lock *sync.RWMutex) timedRLocker {
+	trl := timedRLocker{
+		lock:    lock,
+		preLock: time.Now(),
+	}
+	trl.lock.RLock()
+	trl.postLock = time.Now()
+	return trl
+}
+
+func (trl timedRLocker) RUnlock(op string, logCb func() interface{}) {
+	trl.lock.RUnlock()
+	endTime := time.Now()
+
+	lockHoldTime := endTime.Sub(trl.postLock)
+	lockWaitTime := trl.postLock.Sub(trl.preLock)
+	if lockHoldTime > time.Second {
+		log.Infof("Long %s: lockWaitTime = %v, lockHoldTime = %v, details = '%v'", op, lockWaitTime, lockHoldTime, logCb())
+	} else if lockWaitTime > time.Second {
+		log.Infof("Long Blocked %s: lockWaitTime = %v, lockHoldTime = %v, details = '%v'", op, lockWaitTime, lockHoldTime, logCb())
+	}
+}
+
 type Tree struct {
 	Items map[string]*Node // key is the full path of the node.
 }
@@ -1066,12 +1094,10 @@ func (m *UnpartitionedMemoryIdx) FindByTag(orgId uint32, query tagquery.Query) [
 
 	queryCtx := NewTagQueryContext(query)
 
-	preLock := time.Now()
-
-	m.RLock()
-	defer m.RUnlock()
-
-	postLock := time.Now()
+	trl := acquireTimedLock(&m.RWMutex)
+	defer trl.RUnlock("findByTag", func() interface{} {
+		return query.Expressions.Strings()
+	})
 
 	var enricher *metaTagEnricher
 	var mtr *metaTagRecords
@@ -1119,16 +1145,6 @@ func (m *UnpartitionedMemoryIdx) FindByTag(orgId uint32, query tagquery.Query) [
 		i++
 	}
 
-	endTime := time.Now()
-
-	lockHoldTime := endTime.Sub(postLock)
-	lockWaitTime := postLock.Sub(preLock)
-	if lockHoldTime > time.Duration(500)*time.Millisecond {
-		log.Infof("Long findByTag: lockWaitTime = %v, lockHoldTime = %v, expr = '%v'", lockWaitTime, lockHoldTime, query.Expressions.Strings())
-	} else if lockWaitTime > time.Duration(250)*time.Millisecond {
-		log.Infof("Long Blocked findByTag: lockWaitTime = %v, lockHoldTime = %v, expr = '%v'", lockWaitTime, lockHoldTime, query.Expressions.Strings())
-	}
-
 	return results
 }
 
@@ -1149,9 +1165,10 @@ func (m *UnpartitionedMemoryIdx) FindTerms(orgID uint32, tags []string, query ta
 
 	queryCtx := NewTagQueryContext(query)
 
-	m.RLock()
-	defer m.RUnlock()
-
+	trl := acquireTimedLock(&m.RWMutex)
+	defer trl.RUnlock("tagTerms", func() interface{} {
+		return query.Expressions.Strings()
+	})
 	// construct the output slice of idx.Node's such that there is only 1 idx.Node for each path
 	resCh := m.idsByTagQuery(orgID, queryCtx)
 
@@ -1355,8 +1372,10 @@ func (m *UnpartitionedMemoryIdx) FindTagsWithQuery(orgId uint32, prefix string, 
 
 	queryCtx := NewTagQueryContext(query)
 
-	m.RLock()
-	defer m.RUnlock()
+	trl := acquireTimedLock(&m.RWMutex)
+	defer trl.RUnlock("findTagsWithQuery", func() interface{} {
+		return query.Expressions.Strings()
+	})
 
 	resMap := make(map[string]struct{})
 
@@ -1470,8 +1489,10 @@ func (m *UnpartitionedMemoryIdx) FindTagValuesWithQuery(orgId uint32, tag, prefi
 
 	queryCtx := NewTagQueryContext(query)
 
-	m.RLock()
-	defer m.RUnlock()
+	trl := acquireTimedLock(&m.RWMutex)
+	defer trl.RUnlock("findTagValuesWithQuery", func() interface{} {
+		return query.Expressions.Strings()
+	})
 
 	resMap := make(map[string]struct{})
 
