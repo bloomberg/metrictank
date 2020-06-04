@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/grafana/metrictank/schema"
+	log "github.com/sirupsen/logrus"
 )
 
 // ConsolidateContext wraps a Consolidate() call with a context.Context condition
@@ -28,6 +29,15 @@ func ConsolidateNudged(points []schema.Point, interval, maxDataPoints uint32, co
 	return points, interval * aggNum
 }
 
+func ConsolidateNudgedCopy(points []schema.Point, interval, maxDataPoints uint32, consolidator Consolidator) ([]schema.Point, uint32) {
+	aggNum := AggEvery(uint32(len(points)), maxDataPoints)
+	pointsCopy := make([]schema.Point, len(points))
+	copy(pointsCopy, points)
+	pointsCopy = nudgeMaybe(pointsCopy, aggNum, interval)
+	pointsCopy = Consolidate(pointsCopy, aggNum, consolidator)
+	return pointsCopy, interval * aggNum
+}
+
 // Consolidate consolidates `in`, aggNum points at a time via the given function
 // note: the returned slice repurposes in's backing array.
 // it will always aggregate aggNum-sized groups of points together, with the timestamp of the last of them, and it always starts at the beginning,
@@ -37,6 +47,11 @@ func Consolidate(in []schema.Point, aggNum uint32, consolidator Consolidator) []
 		panic("Consolidate called with consolidation.None. this should never happen")
 	}
 	num := int(aggNum)
+
+	if consolidator == None {
+		log.Warn("Consolidate: told to use None consolidator. Defaulting to Avg")
+		consolidator = Avg
+	}
 	aggFunc := GetAggFunc(consolidator)
 
 	// let's see if the input data is a perfect fit for the requested aggNum
