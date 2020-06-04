@@ -1,6 +1,10 @@
 package expr
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/grafana/metrictank/schema"
+)
 
 var pointSlicePool *sync.Pool
 
@@ -11,4 +15,14 @@ var pointSlicePool *sync.Pool
 // the output from this package's processing is no longer needed.
 func Pool(p *sync.Pool) {
 	pointSlicePool = p
+}
+
+// GetPooledSliceAtLeastSize returns a 0-len slice that can hold at least minSize Points
+func GetPooledSliceAtLeastSize(minSize int) []schema.Point {
+	out := pointSlicePool.Get().([]schema.Point)
+	if cap(out) < minSize {
+		// TODO - return `out` to pool? Could just fetch it again next iteration
+		out = make([]schema.Point, 0, minSize)
+	}
+	return out
 }
