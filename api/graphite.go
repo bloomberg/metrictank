@@ -301,6 +301,23 @@ func (s *Server) renderMetrics(ctx *middleware.Context, request models.GraphiteR
 		span.SetTag("nodatapoints", true)
 	}
 
+	// TODO - remove temporary code
+	// Check for shared data arrays
+	addrs := make(map[*schema.Point]models.Series)
+	for _, series := range out {
+		dpCap := cap(series.Datapoints)
+		if dpCap > 0 {
+			addr := &(series.Datapoints[0:dpCap][dpCap-1])
+			if val, ok := addrs[addr]; ok {
+				log.Errorf("Found results sharing a slice: res1 = %v, res2 = %v, query = %v", val, series, request.Targets)
+				break
+			} else {
+				addrs[addr] = series
+			}
+		}
+	}
+	// TODO - end temp code
+
 	switch request.Format {
 	case "msgp":
 		response.Write(ctx, response.NewMsgp(200, models.SeriesByTarget(out)))
@@ -315,7 +332,8 @@ func (s *Server) renderMetrics(ctx *middleware.Context, request models.GraphiteR
 			response.Write(ctx, response.NewFastJson(200, models.SeriesByTarget(out)))
 		}
 	}
-	plan.Clean()
+	// Disable to test if this is causing erroneous responses
+	// plan.Clean()
 }
 
 func (s *Server) metricsFind(ctx *middleware.Context, request models.GraphiteFind) {
