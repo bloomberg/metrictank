@@ -315,7 +315,29 @@ func (s *Server) renderMetrics(ctx *middleware.Context, request models.GraphiteR
 			response.Write(ctx, response.NewFastJson(200, models.SeriesByTarget(out)))
 		}
 	}
-	plan.Clean()
+	// TODO - move this
+	type ReqSeries struct {
+		req    expr.Req
+		series models.Series
+	}
+	// Map of pointer to end of slice to the first series we found with that address
+	addrs := make(map[*schema.Point]ReqSeries)
+	for req, series := range plan.DataMap() {
+		for _, serie := range series {
+			dpCap := cap(serie.Datapoints)
+			if dpCap > 0 {
+				addr := &(serie.Datapoints[0:dpCap][dpCap-1])
+				if val, ok := addrs[addr]; ok {
+					log.Errorf("Found results sharing a slice: query = %v\nValue 1 req = %v, series = %v\nValue 2 req = %v, series = %v", request.Targets, val.req, val.series, req, series)
+					// Don't want to spew errors so move to next req (we might lose some slices, but NBD)
+					break
+				} else {
+					addrs[addr] = ReqSeries{req, serie}
+					pointSlicePool.Put(serie.Datapoints[:0])
+				}
+			}
+		}
+	}
 }
 
 func (s *Server) metricsFind(ctx *middleware.Context, request models.GraphiteFind) {

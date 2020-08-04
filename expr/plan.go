@@ -358,3 +358,7 @@ func (p *Plan) Run(dataMap DataMap) ([]models.Series, error) {
 func (p Plan) Clean() {
 	p.dataMap.Clean()
 }
+
+func (p Plan) DataMap() DataMap {
+	return p.dataMap
+}
