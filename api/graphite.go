@@ -268,7 +268,6 @@ func (s *Server) renderMetrics(ctx *middleware.Context, request models.GraphiteR
 	execCtx, execSpan := tracing.NewSpan(ctx.Req.Context(), s.Tracer, "executePlan")
 	defer execSpan.Finish()
 	out, meta, err := s.executePlan(execCtx, ctx.OrgId, &plan)
-	defer plan.Clean()
 	if err != nil {
 		err := response.WrapError(err)
 		if err.HTTPStatusCode() == http.StatusBadRequest && !request.NoProxy && proxyBadRequests {
@@ -332,15 +331,14 @@ func (s *Server) renderMetrics(ctx *middleware.Context, request models.GraphiteR
 				addr := &(serie.Datapoints[0:dpCap][dpCap-1])
 				if val, ok := addrs[addr]; ok {
 					log.Errorf("Found results sharing a slice: query = %v\nValue 1 req = %v, series = %v\nValue 2 req = %v, series = %v", request.Targets, val.req, val.series, req, series)
-					// Don't want to spew errors so move to next req (we might lose some slices, but NBD)
-					break
-				} else {
-					addrs[addr] = ReqSeries{req, serie}
-					pointSlicePool.Put(serie.Datapoints[:0])
+					// Don't want to spew errors so move on (don't clean this one)
+					return
 				}
+				addrs[addr] = ReqSeries{req, serie}
 			}
 		}
 	}
+	plan.Clean()
 }
 
 func (s *Server) metricsFind(ctx *middleware.Context, request models.GraphiteFind) {
