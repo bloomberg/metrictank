@@ -31,7 +31,7 @@ function fail () {
 
 # Build binary
 cd cmd
-for bin in *; do
+for bin in {mt-store-cp-experimental,metrictank}; do
   cd $bin
   if [ "$1" == "-race" ]
   then

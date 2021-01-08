@@ -47,6 +47,7 @@ var (
 	endToken     = flag.Int64("end-token", maxToken, "token to stop at (inclusive), defaults to math.MaxInt64")
 	numThreads   = flag.Int("threads", 1, "number of workers to use to process data")
 	maxBatchSize = flag.Int("max-batch-size", 10, "max number of queries per batch")
+	ttlAdjust    = flag.Int("ttl-adjust", 0, "seconds to add to TTL (can be negative for lower TTL)")
 
 	idxTable   = flag.String("idx-table", "metric_idx", "idx table in cassandra")
 	partitions = flag.String("partitions", "*", "process ids for these partitions (comma separated list of partition numbers or '*' for all)")
@@ -70,7 +71,7 @@ func init() {
 
 func main() {
 	flag.Usage = func() {
-		fmt.Fprintln(os.Stderr, "mt-store-cp [flags] table-in [table-out]")
+		fmt.Fprintln(os.Stderr, "mt-store-cp-experimental [flags] table-in table-out")
 		fmt.Fprintln(os.Stderr)
 		fmt.Fprintln(os.Stderr, "Copies data in Cassandra to use another table (and possibly another cluster).")
 		fmt.Fprintln(os.Stderr, "It is up to you to assure table-out exists before running this tool")
@@ -83,15 +84,13 @@ func main() {
 	}
 	flag.Parse()
 
-	if flag.NArg() < 2 || flag.NArg() > 3 {
+	if flag.NArg() != 2 {
+		log.Printf("Expected 2 positional args (table in and table out): got %d", flag.NArg())
 		flag.Usage()
 		os.Exit(2)
 	}
 
-	tableIn, tableOut := flag.Arg(1), flag.Arg(1)
-	if flag.NArg() == 3 {
-		tableOut = flag.Arg(2)
-	}
+	tableIn, tableOut := flag.Arg(0), flag.Arg(1)
 
 	if sourceCassandraAddrs == destCassandraAddrs && tableIn == tableOut {
 		panic("Source and destination cannot be the same")
@@ -195,21 +194,29 @@ func fetchPartitionIds(sourceSession *gocql.Session) {
 	}
 }
 
-func shouldProcessKey(key string) bool {
+func shouldProcessKey(key string, startMonth, endMonth int) bool {
 	if *partitions == "*" {
 		return true
 	}
 	// Keys look like <org>.<id>_[rolluptype_rollupspan_]<epoch_month>
 	// e.g. 1.ecbf02491cb225b0d3070dca52592469_630
 	// or   1.ecbf02491cb225b0d3070dca52592469_max_3600_630
-	id := strings.Split(key, "_")[0]
-	_, ok := partitionIdMap[id]
-	return ok
+	portions := strings.Split(key, "_")
+	id := portions[0]
+	if _, ok := partitionIdMap[id]; !ok {
+		return false
+	}
+
+	epochMonth, err := strconv.Atoi(portions[len(portions)-1])
+	if err != nil || epochMonth < startMonth || epochMonth > endMonth {
+		return false
+	}
+	return true
 }
 
 // completenessEstimate estimates completess of this process (as a number between 0 and 1)
 // by inspecting a cassandra token. The data is ordered by token, so assuming a uniform distribution
-// across the token space, we can estimate process.
+// across the token space, we can estimate progress.
 // the token space is -9,223,372,036,854,775,808 through 9,223,372,036,854,775,807
 // so for example, if we're working on token 3007409301797035962 then we're about 0.66 complete
 func completenessEstimate(token int64) float64 {
@@ -268,11 +275,6 @@ func worker(id int, jobs <-chan string, wg *sync.WaitGroup, sourceSession, destS
 	insertQuery := fmt.Sprintf("INSERT INTO %s (data, key, ts) values(?,?,?) USING TTL ?", tableOut)
 
 	for key := range jobs {
-
-		if !shouldProcessKey(key) {
-			continue
-		}
-
 		rowsHandledLocally := uint64(0)
 		iter := sourceSession.Query(selectQuery, key, startTime, endTime).Iter()
 		for iter.Scan(&token, &ts, &data, &ttl) {
@@ -283,7 +285,7 @@ func worker(id int, jobs <-chan string, wg *sync.WaitGroup, sourceSession, destS
 			// As 'data' is re-used for each scan, we need to make a copy of the []byte slice before assigning it to a new batch.
 			safeData := make([]byte, len(data))
 			copy(safeData, data)
-			batch.Query(insertQuery, safeData, key, ts, ttl)
+			batch.Query(insertQuery, safeData, key, ts, ttl+int64(*ttlAdjust))
 
 			if batch.Size() >= *maxBatchSize {
 				if *verbose {
@@ -331,18 +333,24 @@ func update(sourceSession, destSession *gocql.Session, tableIn, tableOut string)
 
 	lastToken := *startToken
 
+	// Get the unix epoch months that are valid for this run
+	startMonth := *startTs / 28 / 24 / 60 / 60
+	endMonth := *endTs / 28 / 24 / 60 / 60
+
 	// Key grab retry loop
 	for {
 		keyItr := sourceSession.Query(fmt.Sprintf("SELECT distinct key, token(key) FROM %s where token(key) >= %d AND token(key) <= %d", tableIn, lastToken, *endToken)).Iter()
 
 		var key string
 		for keyItr.Scan(&key, &lastToken) {
-			jobs <- key
+			if shouldProcessKey(key, startMonth, endMonth) {
+				jobs <- key
+			}
 		}
 
 		err := keyItr.Close()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "ERROR: failed querying %s: %q. processed %d keys, %d rows\n", tableIn, err, doneKeys, doneRows)
+			fmt.Fprintf(os.Stderr, "ERROR: failed querying %s and key=%s: %q. processed %d keys, %d rows\n", tableIn, key, err, doneKeys, doneRows)
 		} else {
 			break
 		}
