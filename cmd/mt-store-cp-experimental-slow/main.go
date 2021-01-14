@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/gocql/gocql"
-	"github.com/grafana/metrictank/conf"
 	"github.com/grafana/metrictank/logger"
 	"github.com/grafana/metrictank/store/cassandra"
 	hostpool "github.com/hailocab/go-hostpool"
@@ -50,21 +49,18 @@ var (
 	maxBatchSize = flag.Int("max-batch-size", 10, "max number of queries per batch")
 	ttlAdjust    = flag.Int("ttl-adjust", 0, "seconds to add to TTL (can be negative for lower TTL)")
 
-	idxTable       = flag.String("idx-table", "metric_idx", "idx table in cassandra")
-	partitionFrom  = flag.Int("partition-from", 0, "process ids for these partitions (comma separated list of partition numbers or '*' for all)")
-	numPartitions  = flag.Int("partitions", 1, "process ids for these partitions (comma separated list of partition numbers or '*' for all)")
-	aggsFile       = flag.String("agg-file", "/etc/metrictank/storage-aggregation.conf", "Path to aggregation file")
-	hasTagValue    = flag.String("has-tag-value", "", "If specified, only include data with tag=value")
-	hasNoTag       = flag.String("has-no-tag", "", "If specified, only include data without specified tag key")
-	rollupInterval = flag.Int("rollup-interval", 3600, "If greater than 0, the interval of the data to copy")
+	idxTable   = flag.String("idx-table", "metric_idx", "idx table in cassandra")
+	partitions = flag.String("partitions", "*", "process ids for these partitions (comma separated list of partition numbers or '*' for all)")
 
 	progressRows = flag.Int("progress-rows", 1000000, "number of rows between progress output")
 
-	verbose = flag.Bool("verbose", false, "show every record being processed")
+	verbose  = flag.Bool("verbose", false, "show every record being processed")
+	keysOnly = flag.Bool("keys-only", false, "don't fetch or copy the data, just the keys")
 
-	timeStarted time.Time
-	doneKeys    uint64
-	doneRows    uint64
+	timeStarted    time.Time
+	doneKeys       uint64
+	doneRows       uint64
+	partitionIdMap map[string]struct{}
 )
 
 func init() {
@@ -113,7 +109,12 @@ func main() {
 		panic(fmt.Sprintf("Failed to instantiate dest cassandra: %s", err))
 	}
 
-	update(sourceSession, destSession, tableIn, tableOut)
+	if !*keysOnly {
+		update(sourceSession, destSession, tableIn, tableOut)
+	} else {
+		testKeyQueries(sourceSession, destSession, tableIn, tableOut)
+	}
+
 }
 
 func NewCassandraStore(cassandraAddrs *string) (*gocql.Session, error) {
@@ -168,22 +169,86 @@ func NewCassandraStore(cassandraAddrs *string) (*gocql.Session, error) {
 	return cluster.CreateSession()
 }
 
-func shouldProcessKey(id string, tags []string) bool {
-	if len(*hasNoTag) > 0 {
-		for _, tag := range tags {
-			if strings.HasPrefix(tag, *hasNoTag) {
-				return false
+func fetchPartitionIds(sourceSession *gocql.Session) {
+	if *partitions == "*" {
+		return
+	}
+	log.Println("Fetching ids for partitions ", *partitions)
+	partitionIdMap = make(map[string]struct{})
+	partitionStrs := strings.Split(*partitions, ",")
+	selectQuery := fmt.Sprintf("SELECT id FROM %s where partition=?", *idxTable)
+	for _, p := range partitionStrs {
+		if *verbose {
+			log.Println("Fetching ids for partition ", p)
+		}
+		partition, err := strconv.Atoi(p)
+		if err != nil {
+			panic(fmt.Sprintf("Could not parse partition %q, error = %s", p, err))
+		}
+		keyItr := sourceSession.Query(selectQuery, partition).Iter()
+		var key string
+		for keyItr.Scan(&key) {
+			partitionIdMap[key] = struct{}{}
+			if len(partitionIdMap)%10000 == 0 {
+				log.Println("Loading...", len(partitionIdMap), " ids processed, processing partition ", p)
 			}
+		}
+		err = keyItr.Close()
+		if err != nil {
+			panic(fmt.Sprintf("Failed querying for partition key %q, error = %s", p, err))
 		}
 	}
-	if len(*hasTagValue) > 0 {
-		for _, tag := range tags {
-			if tag == *hasTagValue {
-				return false
-			}
+}
+
+func shouldProcessKey(key string, startMonth, endMonth int) bool {
+
+	// Keys look like <org>.<id>_[rolluptype_rollupspan_]<epoch_month>
+	// e.g. 1.ecbf02491cb225b0d3070dca52592469_630
+	// or   1.ecbf02491cb225b0d3070dca52592469_max_3600_630
+	portions := strings.Split(key, "_")
+
+	// Only process ids in our map
+	if *partitions != "*" {
+		id := portions[0]
+		if _, ok := partitionIdMap[id]; !ok {
+			return false
 		}
+	}
+
+	epochMonth, err := strconv.Atoi(portions[len(portions)-1])
+	if err != nil || epochMonth < startMonth || epochMonth > endMonth {
+		return false
 	}
 	return true
+}
+
+// completenessEstimate estimates completess of this process (as a number between 0 and 1)
+// by inspecting a cassandra token. The data is ordered by token, so assuming a uniform distribution
+// across the token space, we can estimate progress.
+// the token space is -9,223,372,036,854,775,808 through 9,223,372,036,854,775,807
+// so for example, if we're working on token 3007409301797035962 then we're about 0.66 complete
+func completenessEstimate(token int64) float64 {
+	tokenRange := float64(*endToken) - float64(*startToken)
+	tokensProcessed := float64(token) - float64(*startToken)
+
+	return tokensProcessed / tokenRange
+}
+
+func roundToSeconds(d time.Duration) time.Duration {
+	return d - (d % time.Second)
+}
+
+func printProgress(id int, token int64, doneRowsSnap uint64) {
+	doneKeysSnap := atomic.LoadUint64(&doneKeys)
+	completeness := completenessEstimate(token)
+	timeElapsed := time.Since(timeStarted)
+
+	// Scale up to scale down to avoid fractional
+	ratioLeft := (1 - completeness) / completeness
+	timeRemaining := time.Duration(float64(timeElapsed) * ratioLeft)
+	rowsPerSec := doneRowsSnap / (uint64(1) + uint64(timeElapsed/time.Second))
+	log.Printf("WORKING: id=%d processed %d keys, %d rows, last token = %d, %.1f%% complete, elapsed=%v, remaining=%v, rows/s=%d",
+		id, doneKeysSnap, doneRowsSnap, token, completeness*100, roundToSeconds(timeElapsed), roundToSeconds(timeRemaining), rowsPerSec)
 }
 
 func publishBatchUntilSuccess(destSession *gocql.Session, batch *gocql.Batch) *gocql.Batch {
@@ -202,37 +267,9 @@ func publishBatchUntilSuccess(destSession *gocql.Session, batch *gocql.Batch) *g
 	return destSession.NewBatch(gocql.UnloggedBatch)
 }
 
-func completenessEstimate(partition int, lastId string) float64 {
-	// get % of the way through partition using id
-	maxVal := 16777215 // ffffff
-	decVal, _ := strconv.ParseInt(lastId[2:8], 16, 64)
-
-	// Percentage of the way through partitions
-	partitionsDone := float64(partition-*partitionFrom) + float64(decVal)/float64(maxVal)
-	return partitionsDone / float64(*numPartitions)
-}
-
-func roundToSeconds(d time.Duration) time.Duration {
-	return d - (d % time.Second)
-}
-
-func printProgress(partition int, id string) {
-	doneKeysSnap := atomic.LoadUint64(&doneKeys)
-	doneRowsSnap := atomic.LoadUint64(&doneRows)
-	completeness := completenessEstimate(partition, id)
-	timeElapsed := time.Since(timeStarted)
-
-	// Scale up to scale down to avoid fractional
-	ratioLeft := (1 - completeness) / completeness
-	timeRemaining := time.Duration(float64(timeElapsed) * ratioLeft)
-	rowsPerSec := doneRowsSnap / (uint64(1) + uint64(timeElapsed/time.Second))
-	log.Printf("WORKING: processed %d keys, %d rows, lastId = %s, %.1f%% complete, elapsed=%v, remaining=%v, rows/s=%d",
-		doneKeysSnap, doneRowsSnap, id, completeness*100, roundToSeconds(timeElapsed), roundToSeconds(timeRemaining), rowsPerSec)
-}
-
 func worker(id int, jobs <-chan string, wg *sync.WaitGroup, sourceSession, destSession *gocql.Session, startTime, endTime int, tableIn, tableOut string) {
 	defer wg.Done()
-	var ttl int64
+	var token, ttl int64
 	var ts int
 	var data []byte
 	var query string
@@ -242,7 +279,7 @@ func worker(id int, jobs <-chan string, wg *sync.WaitGroup, sourceSession, destS
 	// https://docs.datastax.com/en/cql/3.1/cql/cql_using/useBatch.html
 	batch := destSession.NewBatch(gocql.UnloggedBatch)
 
-	selectQuery := fmt.Sprintf("SELECT ts, data, TTL(data) FROM %s where key=? AND ts>=? AND ts<?", tableIn)
+	selectQuery := fmt.Sprintf("SELECT token(key), ts, data, TTL(data) FROM %s where key=? AND ts>=? AND ts<?", tableIn)
 	insertQuery := fmt.Sprintf("INSERT INTO %s (data, key, ts) values(?,?,?) USING TTL ? AND TIMESTAMP ?", tableOut)
 
 	for key := range jobs {
@@ -251,7 +288,7 @@ func worker(id int, jobs <-chan string, wg *sync.WaitGroup, sourceSession, destS
 		if *verbose {
 			log.Printf("id=%d processing rownum=%d table=%q key=%q\n", id, atomic.LoadUint64(&doneRows)+1, tableIn, key)
 		}
-		for iter.Scan(&ts, &data, &ttl) {
+		for iter.Scan(&token, &ts, &data, &ttl) {
 
 			if *verbose {
 				log.Printf("id=%d processing rownum=%d table=%q key=%q ts=%d query=%q data='%x'\n", id, atomic.LoadUint64(&doneRows)+1, tableIn, key, ts, query, data)
@@ -277,8 +314,12 @@ func worker(id int, jobs <-chan string, wg *sync.WaitGroup, sourceSession, destS
 			log.Printf("id=%d completed table=%q key=%q\n", id, tableIn, key)
 		}
 
-		atomic.AddUint64(&doneRows, rowsHandledLocally)
-		atomic.AddUint64(&doneKeys, 1)
+		// A little racy, but good enough for progress reporting
+		doneRowsOld := doneRows
+		doneRowsSnap := atomic.AddUint64(&doneRows, rowsHandledLocally)
+		if (doneRowsOld / uint64(*progressRows)) < (doneRowsSnap / uint64(*progressRows)) {
+			printProgress(id, token, doneRowsSnap)
+		}
 
 		err := iter.Close()
 		if err != nil {
@@ -286,37 +327,14 @@ func worker(id int, jobs <-chan string, wg *sync.WaitGroup, sourceSession, destS
 			doneRowsSnap := atomic.LoadUint64(&doneRows)
 			fmt.Fprintf(os.Stderr, "ERROR: id=%d failed querying %s: %q. processed %d keys, %d rows\n", id, tableIn, err, doneKeysSnap, doneRowsSnap)
 		}
+		atomic.AddUint64(&doneKeys, 1)
 	}
-}
-
-func getAggStrs(aggs []conf.Method) []string {
-	types := make(map[string]struct{})
-
-	for _, a := range aggs {
-		switch a {
-		case conf.Avg:
-			types["cnt"] = struct{}{}
-			types["sum"] = struct{}{}
-		case conf.Sum:
-			types["sum"] = struct{}{}
-		case conf.Lst:
-			types["lst"] = struct{}{}
-		case conf.Max:
-			types["max"] = struct{}{}
-		case conf.Min:
-			types["min"] = struct{}{}
-		}
-	}
-
-	var ret []string
-	for k := range types {
-		ret = append(ret, k)
-	}
-
-	return ret
 }
 
 func update(sourceSession, destSession *gocql.Session, tableIn, tableOut string) {
+	// Get the list of ids that we care about
+	fetchPartitionIds(sourceSession)
+
 	// Kick off our threads
 	jobs := make(chan string, 10000)
 
@@ -328,59 +346,28 @@ func update(sourceSession, destSession *gocql.Session, tableIn, tableOut string)
 
 	timeStarted = time.Now()
 
+	lastToken := *startToken
+
 	// Get the unix epoch months that are valid for this run
 	startMonth := *startTs / 28 / 24 / 60 / 60
 	endMonth := (*endTs - 1) / 28 / 24 / 60 / 60
 
-	aggSchema, err := conf.ReadAggregations(*aggsFile)
-	if err != nil {
-		log.Fatalf("can't read aggregations file %q: %s", aggsFile, err.Error())
-	}
-
-	var months []string
-	for i := startMonth; i <= endMonth; i++ {
-		months = append(months, strconv.Itoa(i))
-	}
-
-	var doneRowsOld uint64
-
 	// Key grab retry loop
-	for p := *partitionFrom; p < *partitionFrom+*numPartitions; p++ {
-		log.Printf("Processing partition %d", p)
-		lastId := "0"
-		for {
-			keyItr := sourceSession.Query(fmt.Sprintf("SELECT id, name, tags FROM %s where partition=%d AND id > '%s'", *idxTable, p, lastId)).Iter()
+	for {
+		keyItr := sourceSession.Query(fmt.Sprintf("SELECT distinct key, token(key) FROM %s where token(key) >= %d AND token(key) <= %d", tableIn, lastToken, *endToken)).Iter()
 
-			var name string
-			var tags []string
-			for keyItr.Scan(&lastId, &name, &tags) {
-				if shouldProcessKey(lastId, tags) {
-					_, aggs := aggSchema.Match(name)
-					for _, aggStr := range getAggStrs(aggs.AggregationMethod) {
-						for _, month := range months {
-							key := fmt.Sprintf("%s_%s_%d_%s", lastId, aggStr, *rollupInterval, month)
-							if *verbose {
-								log.Printf("Genned key=%s", key)
-							}
-							jobs <- key
-						}
-					}
-				}
-
-				doneRowsSnap := atomic.LoadUint64(&doneRows)
-				if doneRowsSnap-doneRowsOld > uint64(*progressRows) {
-					doneRowsOld = doneRowsSnap
-					printProgress(p, lastId)
-				}
-
+		var key string
+		for keyItr.Scan(&key, &lastToken) {
+			if shouldProcessKey(key, startMonth, endMonth) {
+				jobs <- key
 			}
+		}
 
-			err := keyItr.Close()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "ERROR: failed querying %s and lastid=%s: %q. processed %d keys, %d rows\n", tableIn, lastId, err, doneKeys, doneRows)
-			} else {
-				break
-			}
+		err := keyItr.Close()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "ERROR: failed querying %s and key=%s: %q. processed %d keys, %d rows\n", tableIn, key, err, doneKeys, doneRows)
+		} else {
+			break
 		}
 	}
 
@@ -388,4 +375,91 @@ func update(sourceSession, destSession *gocql.Session, tableIn, tableOut string)
 
 	wg.Wait()
 	log.Printf("DONE.  Processed %d keys, %d rows\n", doneKeys, doneRows)
+}
+
+func testKeyQueries(sourceSession, destSession *gocql.Session, tableIn, tableOut string) {
+	// Get the list of ids that we care about
+	fetchPartitionIds(sourceSession)
+
+	lastToken := *startToken
+
+	// Get the unix epoch months that are valid for this run
+	startMonth := *startTs / 28 / 24 / 60 / 60
+	endMonth := (*endTs - 1) / 28 / 24 / 60 / 60
+
+	timeStarted = time.Now()
+
+	fmt.Println("Starting query type 1: Distinct")
+	numKeysRetrieved := 0
+	numKeysAllowed := 0
+	// Key grab retry loop
+	for {
+		keyItr := sourceSession.Query(fmt.Sprintf("SELECT distinct key, token(key) FROM %s where token(key) >= %d AND token(key) <= %d", tableIn, lastToken, *endToken)).Iter()
+
+		var key string
+		for keyItr.Scan(&key, &lastToken) {
+			numKeysRetrieved++
+			if shouldProcessKey(key, startMonth, endMonth) {
+				numKeysAllowed++
+			}
+
+			if numKeysRetrieved%50000 == 0 {
+				log.Printf("Progress: numKeysAllowed=%d, numKeysRetrieved=%d", numKeysAllowed, numKeysRetrieved)
+			}
+
+			if numKeysRetrieved > 1000000 {
+				break
+			}
+		}
+
+		err := keyItr.Close()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "ERROR: failed querying %s and key=%s: %q. processed %d keys, %d rows\n", tableIn, key, err, doneKeys, doneRows)
+		} else {
+			break
+		}
+	}
+
+	timeElapsed := time.Since(timeStarted)
+	log.Printf("Completed query: elapsedTime = %v, numKeysAllowed=%d, numKeysRetrieved=%d", timeElapsed, numKeysRetrieved, numKeysAllowed)
+
+	timeStarted = time.Now()
+
+	fmt.Println("Starting query type 2: Filtered by time")
+	numKeysRetrieved = 0
+	numKeysAllowed = 0
+	seenKeys := map[string]struct{}{}
+	// Key grab retry loop
+	for {
+		keyItr := sourceSession.Query(fmt.Sprintf("SELECT key, token(key) FROM %s where token(key) >= %d AND token(key) <= %d AND ts >= %d AND ts < %d ALLOW FILTERING", tableIn, lastToken, *endToken, *startTs, *endTs)).Iter()
+
+		var key string
+		for keyItr.Scan(&key, &lastToken) {
+			if _, ok := seenKeys[key]; !ok {
+				seenKeys[key] = struct{}{}
+				numKeysRetrieved++
+				if shouldProcessKey(key, startMonth, endMonth) {
+					numKeysAllowed++
+				}
+			}
+
+			if numKeysRetrieved%50000 == 0 {
+				log.Printf("Progress: numKeysAllowed=%d, numKeysRetrieved=%d", numKeysAllowed, numKeysRetrieved)
+			}
+
+			if numKeysRetrieved > 1000000 {
+				break
+			}
+		}
+
+		err := keyItr.Close()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "ERROR: failed querying %s and key=%s: %q. processed %d keys, %d rows\n", tableIn, key, err, doneKeys, doneRows)
+		} else {
+			break
+		}
+	}
+
+	timeElapsed = time.Since(timeStarted)
+	log.Printf("Completed query: elapsedTime = %v, numKeysAllowed=%d, numKeysRetrieved=%d", timeElapsed, numKeysAllowed, numKeysRetrieved)
 }
