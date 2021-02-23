@@ -375,7 +375,6 @@ func (c *CasIdx) load(defs []schema.MetricDefinition, iter cqlIterator, now time
 		if orgId < 0 {
 			orgId = int(idx.OrgIdPublic)
 		}
-
 		mdef := &schema.MetricDefinition{
 			Id:         mkey,
 			OrgId:      uint32(orgId),
@@ -387,6 +386,12 @@ func (c *CasIdx) load(defs []schema.MetricDefinition, iter cqlIterator, now time
 			Tags:       tags,
 			LastUpdate: lastupdate,
 		}
+
+		if err = mdef.Validate(); err != nil {
+			log.Errorf("Encountered invalid idx entry", mdef, err)
+			continue
+		}
+
 		nameWithTags := mdef.NameWithTags()
 		defsByNames[nameWithTags] = append(defsByNames[nameWithTags], mdef)
 	}
