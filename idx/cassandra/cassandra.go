@@ -387,6 +387,12 @@ func (c *CasIdx) load(defs []schema.MetricDefinition, iter cqlIterator, now time
 			Tags:       tags,
 			LastUpdate: lastupdate,
 		}
+
+		if err = mdef.Validate(); err != nil {
+			log.Errorf("Encountered invalid idx entry: def = %v, err = %v", mdef, err)
+			continue
+		}
+
 		nameWithTags := mdef.NameWithTags()
 		defsByNames[nameWithTags] = append(defsByNames[nameWithTags], mdef)
 	}
