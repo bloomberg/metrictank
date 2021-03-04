@@ -130,8 +130,15 @@ func (ht hostToken) String() string {
 // a data structure for organizing the relationship between tokens and hosts
 type tokenRing struct {
 	partitioner partitioner
-	tokens      []hostToken
-	hosts       []*HostInfo
+
+	// tokens map token range to primary replica.
+	// The elements in tokens are sorted by token ascending.
+	// The range for a given item in tokens starts after preceding range and ends with the token specified in
+	// token. The end token is part of the range.
+	// The lowest (i.e. index 0) range wraps around the ring (its preceding range is the one with largest index).
+	tokens []hostToken
+
+	hosts []*HostInfo
 }
 
 func newTokenRing(partitioner string, hosts []*HostInfo) (*tokenRing, error) {
@@ -146,7 +153,7 @@ func newTokenRing(partitioner string, hosts []*HostInfo) (*tokenRing, error) {
 	} else if strings.HasSuffix(partitioner, "RandomPartitioner") {
 		tokenRing.partitioner = randomPartitioner{}
 	} else {
-		return nil, fmt.Errorf("Unsupported partitioner '%s'", partitioner)
+		return nil, fmt.Errorf("unsupported partitioner '%s'", partitioner)
 	}
 
 	for _, host := range hosts {
@@ -193,14 +200,6 @@ func (t *tokenRing) String() string {
 	}
 	buf.WriteString("\n}")
 	return string(buf.Bytes())
-}
-
-func (t *tokenRing) GetHostForPartitionKey(partitionKey []byte) (host *HostInfo, endToken token) {
-	if t == nil {
-		return nil, nil
-	}
-
-	return t.GetHostForToken(t.partitioner.Hash(partitionKey))
 }
 
 func (t *tokenRing) GetHostForToken(token token) (host *HostInfo, endToken token) {

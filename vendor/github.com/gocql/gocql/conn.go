@@ -30,6 +30,8 @@ var (
 		"com.datastax.bdp.cassandra.auth.DseAuthenticator",
 		"io.aiven.cassandra.auth.AivenAuthenticator",
 		"com.ericsson.bss.cassandra.ecaudit.auth.AuditPasswordAuthenticator",
+		"com.amazon.helenus.auth.HelenusAuthenticator",
+		"com.ericsson.bss.cassandra.ecaudit.auth.AuditAuthenticator",
 	}
 )
 
@@ -42,8 +44,8 @@ func approve(authenticator string) bool {
 	return false
 }
 
-//JoinHostPort is a utility to return a address string that can be used
-//gocql.Conn to form a connection with a host.
+// JoinHostPort is a utility to return an address string that can be used
+// by `gocql.Conn` to form a connection with a host.
 func JoinHostPort(addr string, port int) string {
 	addr = strings.TrimSpace(addr)
 	if _, _, err := net.SplitHostPort(addr); err != nil {
@@ -98,6 +100,7 @@ type ConnConfig struct {
 	CQLVersion     string
 	Timeout        time.Duration
 	ConnectTimeout time.Duration
+	Dialer         Dialer
 	Compressor     Compressor
 	Authenticator  Authenticator
 	AuthProvider   func(h *HostInfo) (Authenticator, error)
@@ -122,7 +125,7 @@ func (fn connErrorHandlerFn) HandleError(conn *Conn, err error, closed bool) {
 // which may be serving more queries just fine.
 // Default is 0, should not be changed concurrently with queries.
 //
-// depreciated
+// Deprecated.
 var TimeoutLimit int64 = 0
 
 // Conn is a single connection to a Cassandra node. It can be used to execute
@@ -199,21 +202,37 @@ func (s *Session) dialWithoutObserver(ctx context.Context, host *HostInfo, cfg *
 		panic(fmt.Sprintf("host missing port: %v", port))
 	}
 
-	dialer := &net.Dialer{
-		Timeout: cfg.ConnectTimeout,
-	}
-	if cfg.Keepalive > 0 {
-		dialer.KeepAlive = cfg.Keepalive
+	dialer := cfg.Dialer
+	if dialer == nil {
+		d := &net.Dialer{
+			Timeout: cfg.ConnectTimeout,
+		}
+		if cfg.Keepalive > 0 {
+			d.KeepAlive = cfg.Keepalive
+		}
+		dialer = d
 	}
 
-	conn, err := dialer.DialContext(ctx, "tcp", host.HostnameAndPort())
+	addr := host.HostnameAndPort()
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return nil, err
 	}
 	if cfg.tlsConfig != nil {
 		// the TLS config is safe to be reused by connections but it must not
 		// be modified after being used.
-		tconn := tls.Client(conn, cfg.tlsConfig)
+		tlsConfig := cfg.tlsConfig
+		if !tlsConfig.InsecureSkipVerify && tlsConfig.ServerName == "" {
+			colonPos := strings.LastIndex(addr, ":")
+			if colonPos == -1 {
+				colonPos = len(addr)
+			}
+			hostname := addr[:colonPos]
+			// clone config to avoid modifying the shared one.
+			tlsConfig = tlsConfig.Clone()
+			tlsConfig.ServerName = hostname
+		}
+		tconn := tls.Client(conn, tlsConfig)
 		if err := tconn.Handshake(); err != nil {
 			conn.Close()
 			return nil, err
@@ -1079,7 +1098,7 @@ func (c *Conn) executeQuery(ctx context.Context, qry *Query) *Iter {
 		info  *preparedStatment
 	)
 
-	if qry.shouldPrepare() {
+	if !qry.skipPrepare && qry.shouldPrepare() {
 		// Prepare all DML queries. Other queries can not be prepared.
 		var err error
 		info, err = c.prepareStatement(ctx, qry.stmt, qry.trace)
@@ -1192,11 +1211,8 @@ func (c *Conn) executeQuery(ctx context.Context, qry *Query) *Iter {
 		return iter
 	case *RequestErrUnprepared:
 		stmtCacheKey := c.session.stmtsLRU.keyFor(c.addr, c.currentKeyspace, qry.stmt)
-		if c.session.stmtsLRU.remove(stmtCacheKey) {
-			return c.executeQuery(ctx, qry)
-		}
-
-		return &Iter{err: x, framer: framer}
+		c.session.stmtsLRU.evictPreparedID(stmtCacheKey, x.StatementId)
+		return c.executeQuery(ctx, qry)
 	case error:
 		return &Iter{err: x, framer: framer}
 	default:
@@ -1228,7 +1244,7 @@ func (c *Conn) AvailableStreams() int {
 
 func (c *Conn) UseKeyspace(keyspace string) error {
 	q := &writeQueryFrame{statement: `USE "` + keyspace + `"`}
-	q.params.consistency = Any
+	q.params.consistency = c.session.cons
 
 	framer, err := c.exec(c.ctx, q, nil)
 	if err != nil {
@@ -1336,14 +1352,9 @@ func (c *Conn) executeBatch(ctx context.Context, batch *Batch) *Iter {
 		stmt, found := stmts[string(x.StatementId)]
 		if found {
 			key := c.session.stmtsLRU.keyFor(c.addr, c.currentKeyspace, stmt)
-			c.session.stmtsLRU.remove(key)
+			c.session.stmtsLRU.evictPreparedID(key, x.StatementId)
 		}
-
-		if found {
-			return c.executeBatch(ctx, batch)
-		} else {
-			return &Iter{err: x, framer: framer}
-		}
+		return c.executeBatch(ctx, batch)
 	case *resultRowsFrame:
 		iter := &Iter{
 			meta:    x.meta,
@@ -1362,6 +1373,8 @@ func (c *Conn) executeBatch(ctx context.Context, batch *Batch) *Iter {
 func (c *Conn) query(ctx context.Context, statement string, values ...interface{}) (iter *Iter) {
 	q := c.session.Query(statement, values...).Consistency(One)
 	q.trace = nil
+	q.skipPrepare = true
+	q.disableSkipMetadata = true
 	return c.executeQuery(ctx, q)
 }
 
