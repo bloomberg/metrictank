@@ -63,7 +63,7 @@ unused-packages = true
 
 [[constraint]]
   name = "github.com/gocql/gocql"
-  revision = "1982a06ad6b987c24beec15336019914d71b2e31"
+  revision = "4364a4b9cfdd5b806725cc7d2e9abf3bdf461166"
 
 [[constraint]]
   name = "github.com/hailocab/go-hostpool"
