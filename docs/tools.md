@@ -192,7 +192,7 @@ In particular, the vegeta outputs are handy to pipe requests for given series in
 
 Usage:
 
-  mt-index-cat [global config flags] <idxtype> [idx config flags] output 
+  mt-index-cat [global config flags] <idxtype> [idx config flags] output
 
 global config flags:
 
@@ -295,7 +295,7 @@ bigtable config flags:
   -create-cf
     	enable the creation of the table and column families (default true)
   -enabled
-    	
+
   -gcp-project string
     	Name of GCP project the bigtable cluster resides in (default "default")
   -prune-interval duration
@@ -580,7 +580,7 @@ Flags:
   -brokers string
     	tcp address for kafka (may be given multiple times as comma separated list) (default "kafka:9092")
   -enabled
-    	
+
   -kafka-version string
     	Kafka version in semver format. All brokers must be this version or newer. (default "2.0.0")
   -offset string
@@ -1044,4 +1044,3 @@ Flags:
   -version
     	print version string
 ```
-
