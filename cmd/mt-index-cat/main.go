@@ -50,6 +50,7 @@ func main() {
 	var limit int
 	var partitionStr string
 	var btTotalPartitions int
+	var ids string
 
 	globalFlags := flag.NewFlagSet("global config flags", flag.ExitOnError)
 	globalFlags.StringVar(&addr, "addr", "http://localhost:6060", "graphite/metrictank address")
@@ -66,6 +67,7 @@ func main() {
 	globalFlags.StringVar(&minStale, "min-stale", "0", "exclude series that have been seen in this much time (compared against LastUpdate).  use 0 to disable")
 	globalFlags.IntVar(&limit, "limit", 0, "only show this many metrics.  use 0 to disable")
 	globalFlags.BoolVar(&verbose, "verbose", false, "print stats to stderr")
+	globalFlags.StringVar(&ids, "ids", "", "only show metrics from the comma separated list of IDs")
 
 	cassFlags := cassandra.ConfigSetup()
 	btFlags := bigtable.ConfigSetup()
@@ -302,6 +304,17 @@ func main() {
 	var total int
 	var shown int
 
+	mkeys := make(map[schema.MKey]bool, 0)
+	if ids != "" {
+		for _, id := range strings.Split(ids, ",") {
+			mkey, err := schema.MKeyFromString(id)
+			if err != nil {
+				panic(err) // todo, maybe ignore
+			}
+			mkeys[mkey] = true
+		}
+	}
+
 	processDefs := func(defs []schema.MetricDefinition) {
 		total += len(defs)
 		if shown >= limit && limit > 0 {
@@ -309,6 +322,10 @@ func main() {
 			return
 		}
 		for _, d := range defs {
+			if ids != "" && !mkeys[d.Id] {
+				continue
+			}
+
 			// note that prefix and substr can be "", meaning filter disabled.
 			// the conditions handle this fine as well.
 			if !strings.HasPrefix(d.Name, prefix) {
