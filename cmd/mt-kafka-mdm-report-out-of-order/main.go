@@ -43,7 +43,7 @@ func configureKafkaMdm(configurationFile string) *inKafkaMdm.KafkaMdm {
 
 	conf.Parse()
 	inKafkaMdm.Enabled = true // config may have had it disabled
-	inKafkaMdm.ConfigProcess("mt-kafka-mdm-sniff-out-of-order" + strconv.Itoa(rand.Int()))
+	inKafkaMdm.ConfigProcess("mt-kafka-mdm-report-out-of-order" + strconv.Itoa(rand.Int()))
 
 	return inKafkaMdm.New()
 }
