@@ -109,15 +109,21 @@ func (ip *inputOOOFinder) ProcessMetricData(metric *schema.MetricData, partition
 			tracker.NumBad = 0
 			ip.data[mkey] = tracker
 		} else {
-			// if metric time <= head point time, update "bad", generate event and print
+			// if metric time + grace period <= head point time, update "bad", generate event and print
 			tracker.Bad = now
 			tracker.NumBad += 1
 			tracker.DeltaTime = tracker.Head.Time() - uint32(metric.Time)
 			tracker.DeltaSeen = uint32(now.Seen.Unix()) - uint32(tracker.Head.Seen.Unix())
 			ip.data[mkey] = tracker
+
+			// increment grouping counts
 			(*ip.groupedByName)[metric.Name]++
 			for _, tag := range metric.Tags {
 				kv := strings.Split(tag, "=")
+				if len(kv) != 2 {
+					log.Errorf("unexpected tag encoding %s", tag)
+					continue
+				}
 				if kv[0] == ip.groupByTag {
 					(*ip.groupedByTag)[kv[1]]++
 				}
