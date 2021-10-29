@@ -67,5 +67,4 @@ func (applicationFlags *ApplicationFlags) Parse(args []string) {
 		log.Fatalf("must specify one of -group-by-name or -group-by-tag")
 		os.Exit(1)
 	}
-
 }
