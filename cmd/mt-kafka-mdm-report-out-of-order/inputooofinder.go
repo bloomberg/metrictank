@@ -169,12 +169,13 @@ func (ip *inputOOOFinder) ProcessMetricPoint(mp schema.MetricPoint, format msg.F
 			tracker.NumBad = 0
 			ip.data[mp.MKey] = tracker
 		} else {
-			// if metric time <= head point time, update "bad", generate event and print
+			// if metric time + grace period <= head point time, update "bad", generate event and print
 			tracker.Bad = now
 			tracker.NumBad += 1
 			tracker.DeltaTime = tracker.Head.Time() - mp.Time
 			tracker.DeltaSeen = uint32(now.Seen.Unix()) - uint32(tracker.Head.Seen.Unix())
 
+			// increment grouping counts
 			ip.data[mp.MKey] = tracker
 			(*ip.groupedByName)[metricDefinition.Name]++
 			for _, tag := range metricDefinition.Tags {
