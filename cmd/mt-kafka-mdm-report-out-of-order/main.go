@@ -103,7 +103,7 @@ func main() {
 	case <-ctx.Done():
 		log.Info("Mdm input plugin signalled a fatal error. Shutting down")
 	case <-time.After(applicationFlags.RunDuration):
-		log.Infof("todo ran out of time")
+		log.Infof("Finished scanning")
 	}
 	kafkaMdm.Stop()
 
