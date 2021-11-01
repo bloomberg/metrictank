@@ -77,10 +77,10 @@ func (ip *inputOOOFinder) ProcessMetricData(metric *schema.MetricData, partition
 			Latest: metric.Time,
 		}
 	} else {
-		if metric.Time+int64(ip.graceDuration.Seconds()) > track.Latest {
+		if metric.Time > track.Latest {
 			track.Latest = metric.Time
 			ip.tracker[mkey] = track
-		} else {
+		} else if metric.Time+int64(ip.graceDuration.Seconds()) <= track.Latest {
 			// increment grouping counts
 			(*ip.groupedByName)[metric.Name]++
 			for _, tag := range metric.Tags {
@@ -114,10 +114,10 @@ func (ip *inputOOOFinder) ProcessMetricPoint(mp schema.MetricPoint, format msg.F
 		return
 	}
 
-	if int64(mp.Time)+int64(ip.graceDuration.Seconds()) > track.Latest {
+	if int64(mp.Time) > track.Latest {
 		track.Latest = int64(mp.Time)
 		ip.tracker[mp.MKey] = track
-	} else {
+	} else if int64(mp.Time)+int64(ip.graceDuration.Seconds()) > track.Latest {
 		// increment grouping counts
 		(*ip.groupedByName)[track.Name]++
 		for _, tag := range track.Tags {
