@@ -48,7 +48,7 @@ func configureKafkaMdm(configurationFile string) *inKafkaMdm.KafkaMdm {
 	return inKafkaMdm.New()
 }
 
-func loadMetricDefinitionsFromCassandra(partitionFrom int, partitionTo int) map[schema.MKey]schema.MetricDefinition {
+func loadMetricDefinitionsFromCassandra(partitionFrom int, partitionTo int) Tracker {
 	cassandra.CliConfig.Enabled = true
 	cassandraIndex := cassandra.New(cassandra.CliConfig)
 	err := cassandraIndex.InitBare()
@@ -61,9 +61,12 @@ func loadMetricDefinitionsFromCassandra(partitionFrom int, partitionTo int) map[
 	for partition := partitionFrom; (partitionTo == -1 && partition == partitionFrom) || (partitionTo > 0 && partition < partitionTo); partition++ {
 		metricDefinitionSlice = cassandraIndex.LoadPartitions([]int32{int32(partition)}, metricDefinitionSlice, time.Now())
 	}
-	metricDefinitions := map[schema.MKey]schema.MetricDefinition{}
+	metricDefinitions := Tracker{}
 	for _, def := range metricDefinitionSlice {
-		metricDefinitions[def.Id] = def
+		metricDefinitions[def.Id] = Track{
+			Name: def.Name,
+			Tags: def.Tags,
+		}
 	}
 
 	return metricDefinitions
