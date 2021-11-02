@@ -14,7 +14,7 @@ type Track struct {
 	Name string
 	Tags []string
 
-	Latest int64
+	LatestTimestamp int64
 }
 
 type Tracker map[schema.MKey]Track
@@ -60,10 +60,10 @@ func (ip *inputOOOFinder) processTrack(metricKey schema.MKey, metricTime int64, 
 		return
 	}
 
-	if metricTime > track.Latest {
-		track.Latest = metricTime
+	if metricTime > track.LatestTimestamp {
+		track.LatestTimestamp = metricTime
 		ip.tracker[metricKey] = track
-	} else if metricTime+int64(ip.graceDuration.Seconds()) < track.Latest {
+	} else if metricTime+int64(ip.graceDuration.Seconds()) < track.LatestTimestamp {
 		// increment grouping counts
 		if ip.groupByName == true {
 			(*ip.groupedByName)[track.Name]++
@@ -97,9 +97,9 @@ func (ip *inputOOOFinder) ProcessMetricData(metric *schema.MetricData, partition
 	track, exists := ip.tracker[metricKey]
 	if !exists {
 		ip.tracker[metricKey] = Track{
-			Name:   metric.Name,
-			Tags:   metric.Tags,
-			Latest: metric.Time,
+			Name:            metric.Name,
+			Tags:            metric.Tags,
+			LatestTimestamp: metric.Time,
 		}
 		return
 	}
