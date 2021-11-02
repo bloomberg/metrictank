@@ -28,14 +28,15 @@ type inputOOOFinder struct {
 
 	tracker Tracker
 
-	groupByTag    string
+	groupByName   bool
 	groupedByName *map[string]int
+	groupByTag    string
 	groupedByTag  *map[string]int
 
 	lock sync.Mutex
 }
 
-func newInputOOOFinder(graceDuration time.Duration, prefix string, substr string, doUnknownMP bool, tracker Tracker, groupByTag string, groupedByName *map[string]int, groupedByTag *map[string]int) *inputOOOFinder {
+func newInputOOOFinder(graceDuration time.Duration, prefix string, substr string, doUnknownMP bool, tracker Tracker, groupByName bool, groupedByName *map[string]int, groupByTag string, groupedByTag *map[string]int) *inputOOOFinder {
 	return &inputOOOFinder{
 		graceDuration,
 		prefix,
@@ -44,46 +45,34 @@ func newInputOOOFinder(graceDuration time.Duration, prefix string, substr string
 
 		tracker,
 
-		groupByTag,
+		groupByName,
 		groupedByName,
+		groupByTag,
 		groupedByTag,
 
 		sync.Mutex{},
 	}
 }
 
-func (ip *inputOOOFinder) ProcessMetricData(metric *schema.MetricData, partition int32) {
-	if ip.prefix != "" && !strings.HasPrefix(metric.Name, ip.prefix) {
+func (ip *inputOOOFinder) processTrack(metricKey schema.MKey, metricTime int64, track Track) {
+	if ip.prefix != "" && !strings.HasPrefix(track.Name, ip.prefix) {
 		return
 	}
-	if ip.substr != "" && !strings.Contains(metric.Name, ip.substr) {
-		return
-	}
-
-	mkey, err := schema.MKeyFromString(metric.Id)
-	if err != nil {
-		log.Errorf("could not parse id %q: %s", metric.Id, err.Error())
+	if ip.substr != "" && !strings.Contains(track.Name, ip.substr) {
 		return
 	}
 
-	ip.lock.Lock()
-	defer ip.lock.Unlock()
-
-	track, exists := ip.tracker[mkey]
-	if !exists {
-		ip.tracker[mkey] = Track{
-			Name:   metric.Name,
-			Tags:   metric.Tags,
-			Latest: metric.Time,
+	if metricTime > track.Latest {
+		track.Latest = metricTime
+		ip.tracker[metricKey] = track
+	} else if metricTime+int64(ip.graceDuration.Seconds()) < track.Latest {
+		// increment grouping counts
+		if ip.groupByName == true {
+			(*ip.groupedByName)[track.Name]++
 		}
-	} else {
-		if int64(metric.Time) > track.Latest {
-			track.Latest = metric.Time
-			ip.tracker[mkey] = track
-		} else if int64(metric.Time)+int64(ip.graceDuration.Seconds()) < track.Latest {
-			// increment grouping counts
-			(*ip.groupedByName)[metric.Name]++
-			for _, tag := range metric.Tags {
+
+		if ip.groupByTag != "" {
+			for _, tag := range track.Tags {
 				kv := strings.Split(tag, "=")
 				if len(kv) != 2 {
 					log.Errorf("unexpected tag encoding %s", tag)
@@ -97,6 +86,29 @@ func (ip *inputOOOFinder) ProcessMetricData(metric *schema.MetricData, partition
 	}
 }
 
+func (ip *inputOOOFinder) ProcessMetricData(metric *schema.MetricData, partition int32) {
+	metricKey, err := schema.MKeyFromString(metric.Id)
+	if err != nil {
+		log.Errorf("could not parse id %q: %s", metric.Id, err.Error())
+		return
+	}
+
+	ip.lock.Lock()
+	defer ip.lock.Unlock()
+
+	track, exists := ip.tracker[metricKey]
+	if !exists {
+		ip.tracker[metricKey] = Track{
+			Name:   metric.Name,
+			Tags:   metric.Tags,
+			Latest: metric.Time,
+		}
+		return
+	}
+
+	ip.processTrack(metricKey, metric.Time, track)
+}
+
 func (ip *inputOOOFinder) ProcessMetricPoint(mp schema.MetricPoint, format msg.Format, partition int32) {
 	ip.lock.Lock()
 	defer ip.lock.Unlock()
@@ -107,26 +119,7 @@ func (ip *inputOOOFinder) ProcessMetricPoint(mp schema.MetricPoint, format msg.F
 		return
 	}
 
-	if ip.prefix != "" && !strings.HasPrefix(track.Name, ip.prefix) {
-		return
-	}
-	if ip.substr != "" && !strings.Contains(track.Name, ip.substr) {
-		return
-	}
-
-	if int64(mp.Time) > track.Latest {
-		track.Latest = int64(mp.Time)
-		ip.tracker[mp.MKey] = track
-	} else if int64(mp.Time)+int64(ip.graceDuration.Seconds()) < track.Latest {
-		// increment grouping counts
-		(*ip.groupedByName)[track.Name]++
-		for _, tag := range track.Tags {
-			kv := strings.Split(tag, "=")
-			if kv[0] == ip.groupByTag {
-				(*ip.groupedByTag)[kv[1]]++
-			}
-		}
-	}
+	ip.processTrack(mp.MKey, int64(mp.Time), track)
 }
 
 func (ip *inputOOOFinder) ProcessIndexControlMsg(msg schema.ControlMsg, partition int32) {

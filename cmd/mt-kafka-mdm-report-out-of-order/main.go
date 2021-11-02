@@ -87,8 +87,9 @@ func main() {
 		applicationFlags.Substr,
 		applicationFlags.DoUnknownMP,
 		loadMetricDefinitionsFromCassandra(applicationFlags.PartitionFrom, applicationFlags.PartitionTo),
-		applicationFlags.GroupByTag,
+		applicationFlags.GroupByName,
 		&groupedByName,
+		applicationFlags.GroupByTag,
 		&groupedByTag,
 	)
 
