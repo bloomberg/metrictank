@@ -15,17 +15,16 @@ import (
 type Flags struct {
 	flagSet *flag.FlagSet
 
-	runDurationStr   string
-	Config           string
-	PartitionFrom    int
-	PartitionTo      int
-	graceDurationStr string
-	MetricInterval   int
-	ReorderWindow    int
-	Prefix           string
-	Substr           string
-	GroupByName      bool
-	GroupByTag       string
+	runDurationStr string
+	Config         string
+	PartitionFrom  int
+	PartitionTo    int
+	MetricInterval int
+	ReorderWindow  int
+	Prefix         string
+	Substr         string
+	GroupByName    bool
+	GroupByTag     string
 
 	// after parsing
 	RunDuration time.Duration
