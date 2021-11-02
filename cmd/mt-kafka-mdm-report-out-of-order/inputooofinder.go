@@ -23,11 +23,11 @@ type Tracker map[schema.MKey]Track
 
 // find out of order metrics
 type inputOOOFinder struct {
-	reorderBufferGracePeriod int64
-	prefix                   string
-	substr                   string
+	prefix string
+	substr string
 
-	tracker Tracker
+	tracker                  Tracker
+	reorderBufferGracePeriod int64
 
 	groupByName   bool
 	groupedByName *map[string]int
@@ -37,7 +37,7 @@ type inputOOOFinder struct {
 	lock sync.Mutex
 }
 
-func newInputOOOFinder(metricInterval int, reorderWindow int, prefix string, substr string, partitionFrom int, partitionTo int, groupByName bool, groupedByName *map[string]int, groupByTag string, groupedByTag *map[string]int) *inputOOOFinder {
+func newInputOOOFinder(prefix string, substr string, partitionFrom int, partitionTo int, metricInterval int, reorderWindow int, groupByName bool, groupedByName *map[string]int, groupByTag string, groupedByTag *map[string]int) *inputOOOFinder {
 	cassandraIndex := cassandra.New(cassandra.CliConfig)
 	err := cassandraIndex.InitBare()
 	if err != nil {
@@ -59,18 +59,18 @@ func newInputOOOFinder(metricInterval int, reorderWindow int, prefix string, sub
 	}
 
 	return &inputOOOFinder{
-		int64(metricInterval * reorderWindow),
-		prefix,
-		substr,
+		prefix: prefix,
+		substr: substr,
 
-		tracker,
+		tracker:                  tracker,
+		reorderBufferGracePeriod: int64(metricInterval * reorderWindow),
 
-		groupByName,
-		groupedByName,
-		groupByTag,
-		groupedByTag,
+		groupByName:   groupByName,
+		groupedByName: groupedByName,
+		groupByTag:    groupByTag,
+		groupedByTag:  groupedByTag,
 
-		sync.Mutex{},
+		lock: sync.Mutex{},
 	}
 }
 
