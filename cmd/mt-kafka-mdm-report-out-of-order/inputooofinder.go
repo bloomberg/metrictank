@@ -24,7 +24,6 @@ type inputOOOFinder struct {
 	graceDuration time.Duration
 	prefix        string
 	substr        string
-	doUnknownMP   bool
 
 	tracker Tracker
 
@@ -36,12 +35,11 @@ type inputOOOFinder struct {
 	lock sync.Mutex
 }
 
-func newInputOOOFinder(graceDuration time.Duration, prefix string, substr string, doUnknownMP bool, tracker Tracker, groupByName bool, groupedByName *map[string]int, groupByTag string, groupedByTag *map[string]int) *inputOOOFinder {
+func newInputOOOFinder(graceDuration time.Duration, prefix string, substr string, tracker Tracker, groupByName bool, groupedByName *map[string]int, groupByTag string, groupedByTag *map[string]int) *inputOOOFinder {
 	return &inputOOOFinder{
 		graceDuration,
 		prefix,
 		substr,
-		doUnknownMP,
 
 		tracker,
 

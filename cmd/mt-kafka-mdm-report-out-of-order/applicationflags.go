@@ -18,7 +18,6 @@ type ApplicationFlags struct {
 	graceDurationStr string
 	Prefix           string
 	Substr           string
-	DoUnknownMP      bool
 	GroupByName      bool
 	GroupByTag       string
 
@@ -38,7 +37,6 @@ func NewApplicationFlags() *ApplicationFlags {
 	applicationFlags.flagSet.StringVar(&applicationFlags.graceDurationStr, "grace-duration", "0s", "todo")
 	applicationFlags.flagSet.StringVar(&applicationFlags.Prefix, "prefix", "", "only show metrics with a name that has this prefix")
 	applicationFlags.flagSet.StringVar(&applicationFlags.Substr, "substr", "", "only show metrics with a name that has this substring")
-	applicationFlags.flagSet.BoolVar(&applicationFlags.DoUnknownMP, "do-unknown-mp", true, "process MetricPoint messages for which no MetricData messages have been seen. If you use prefix/substr filter, this may report on metrics you wanted to filter out!")
 	applicationFlags.flagSet.BoolVar(&applicationFlags.GroupByName, "group-by-name", false, "group out-of-order metrics by name")
 	applicationFlags.flagSet.StringVar(&applicationFlags.GroupByTag, "group-by-tag", "", "group out-of-order metrics by the specified tag")
 

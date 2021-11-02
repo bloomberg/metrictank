@@ -85,7 +85,6 @@ func main() {
 		applicationFlags.GraceDuration,
 		applicationFlags.Prefix,
 		applicationFlags.Substr,
-		applicationFlags.DoUnknownMP,
 		loadMetricDefinitionsFromCassandra(applicationFlags.PartitionFrom, applicationFlags.PartitionTo),
 		applicationFlags.GroupByName,
 		&groupedByName,
