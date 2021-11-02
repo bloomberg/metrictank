@@ -110,13 +110,13 @@ func main() {
 	if applicationFlags.GroupByName {
 		log.Info("grouped by name:")
 		for key, value := range groupedByName {
-			log.Infof("%s : %d", key, value)
+			log.Infof("name=%s count=%d", key, value)
 		}
 	}
 	if applicationFlags.GroupByTag != "" {
 		log.Info("grouped by tag:")
 		for key, value := range groupedByTag {
-			log.Infof("%s : %d", key, value)
+			log.Infof("tag=%s count=%d", key, value)
 		}
 	}
 }

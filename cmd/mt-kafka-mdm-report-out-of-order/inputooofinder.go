@@ -73,7 +73,7 @@ func (ip *inputOOOFinder) processTrack(metricKey schema.MKey, metricTime int64, 
 			for _, tag := range track.Tags {
 				kv := strings.Split(tag, "=")
 				if len(kv) != 2 {
-					log.Errorf("unexpected tag encoding %s", tag)
+					log.Errorf("unexpected tag encoding tag=%q", tag)
 					continue
 				}
 				if kv[0] == ip.groupByTag {
@@ -87,7 +87,7 @@ func (ip *inputOOOFinder) processTrack(metricKey schema.MKey, metricTime int64, 
 func (ip *inputOOOFinder) ProcessMetricData(metric *schema.MetricData, partition int32) {
 	metricKey, err := schema.MKeyFromString(metric.Id)
 	if err != nil {
-		log.Errorf("could not parse id %q: %s", metric.Id, err.Error())
+		log.Errorf("failed to get metric key from id=%v: %s", metric.Id, err.Error())
 		return
 	}
 
@@ -113,7 +113,7 @@ func (ip *inputOOOFinder) ProcessMetricPoint(mp schema.MetricPoint, format msg.F
 
 	track, exists := ip.tracker[mp.MKey]
 	if !exists {
-		log.Errorf("metric definition for key %v not found", mp.MKey)
+		log.Errorf("metric definition for key=%v not found", mp.MKey)
 		return
 	}
 
