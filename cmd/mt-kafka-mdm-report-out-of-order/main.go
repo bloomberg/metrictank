@@ -9,7 +9,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/grafana/globalconf"
 	"github.com/grafana/metrictank/idx/cassandra"
 	inKafkaMdm "github.com/grafana/metrictank/input/kafkamdm"
 	"github.com/grafana/metrictank/logger"
@@ -22,30 +21,6 @@ func configureLogging() {
 	formatter.TimestampFormat = "2006-01-02 15:04:05.000"
 	log.SetFormatter(formatter)
 	log.SetLevel(log.InfoLevel)
-}
-
-func configureKafkaMdm(configurationFile string) *inKafkaMdm.KafkaMdm {
-	// Only try and parse the conf file if it exists
-	path := ""
-	if _, err := os.Stat(configurationFile); err == nil {
-		path = configurationFile
-	}
-	conf, err := globalconf.NewWithOptions(&globalconf.Options{
-		Filename:  path,
-		EnvPrefix: "MT_",
-	})
-	if err != nil {
-		log.Fatalf("error with configuration file: %s", err.Error())
-		os.Exit(1)
-	}
-
-	inKafkaMdm.ConfigSetup()
-
-	conf.Parse()
-	inKafkaMdm.Enabled = true // config may have had it disabled
-	inKafkaMdm.ConfigProcess("mt-kafka-mdm-report-out-of-order" + strconv.Itoa(rand.Int()))
-
-	return inKafkaMdm.New()
 }
 
 func loadMetricDefinitionsFromCassandra(partitionFrom int, partitionTo int) Tracker {
@@ -75,20 +50,21 @@ func loadMetricDefinitionsFromCassandra(partitionFrom int, partitionTo int) Trac
 func main() {
 	configureLogging()
 
-	applicationFlags := ParseFlags()
+	flags := ParseFlags()
 
-	kafkaMdm := configureKafkaMdm(applicationFlags.ConfFile)
+	inKafkaMdm.ConfigProcess("mt-kafka-mdm-report-out-of-order" + strconv.Itoa(rand.Int()))
+	kafkaMdm := inKafkaMdm.New()
 
 	groupedByName := map[string]int{}
 	groupedByTag := map[string]int{}
 	inputOOOFinder := newInputOOOFinder(
-		applicationFlags.GraceDuration,
-		applicationFlags.Prefix,
-		applicationFlags.Substr,
-		loadMetricDefinitionsFromCassandra(applicationFlags.PartitionFrom, applicationFlags.PartitionTo),
-		applicationFlags.GroupByName,
+		flags.GraceDuration,
+		flags.Prefix,
+		flags.Substr,
+		loadMetricDefinitionsFromCassandra(flags.PartitionFrom, flags.PartitionTo),
+		flags.GroupByName,
 		&groupedByName,
-		applicationFlags.GroupByTag,
+		flags.GroupByTag,
 		&groupedByTag,
 	)
 
@@ -102,18 +78,18 @@ func main() {
 		log.Infof("Received signal %q. Shutting down", sig)
 	case <-ctx.Done():
 		log.Info("Mdm input plugin signalled a fatal error. Shutting down")
-	case <-time.After(applicationFlags.RunDuration):
+	case <-time.After(flags.RunDuration):
 		log.Infof("Finished scanning")
 	}
 	kafkaMdm.Stop()
 
-	if applicationFlags.GroupByName {
+	if flags.GroupByName {
 		log.Info("grouped by name:")
 		for key, value := range groupedByName {
 			log.Infof("name=%s count=%d", key, value)
 		}
 	}
-	if applicationFlags.GroupByTag != "" {
+	if flags.GroupByTag != "" {
 		log.Info("grouped by tag:")
 		for key, value := range groupedByTag {
 			log.Infof("tag=%s count=%d", key, value)
