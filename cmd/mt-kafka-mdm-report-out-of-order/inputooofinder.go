@@ -113,7 +113,7 @@ func (ip *inputOOOFinder) ProcessMetricPoint(mp schema.MetricPoint, format msg.F
 
 	track, exists := ip.tracker[mp.MKey]
 	if !exists {
-		log.Errorf("metric definition not found")
+		log.Errorf("metric definition for key %v not found", mp.MKey)
 		return
 	}
 
