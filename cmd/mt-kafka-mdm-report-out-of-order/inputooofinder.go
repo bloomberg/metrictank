@@ -23,9 +23,9 @@ type Tracker map[schema.MKey]Track
 
 // find out of order metrics
 type inputOOOFinder struct {
-	graceDuration time.Duration
-	prefix        string
-	substr        string
+	reorderBufferGracePeriod int64
+	prefix                   string
+	substr                   string
 
 	tracker Tracker
 
@@ -37,7 +37,7 @@ type inputOOOFinder struct {
 	lock sync.Mutex
 }
 
-func newInputOOOFinder(graceDuration time.Duration, prefix string, substr string, partitionFrom int, partitionTo int, groupByName bool, groupedByName *map[string]int, groupByTag string, groupedByTag *map[string]int) *inputOOOFinder {
+func newInputOOOFinder(metricInterval int, reorderWindow int, prefix string, substr string, partitionFrom int, partitionTo int, groupByName bool, groupedByName *map[string]int, groupByTag string, groupedByTag *map[string]int) *inputOOOFinder {
 	cassandraIndex := cassandra.New(cassandra.CliConfig)
 	err := cassandraIndex.InitBare()
 	if err != nil {
@@ -59,7 +59,7 @@ func newInputOOOFinder(graceDuration time.Duration, prefix string, substr string
 	}
 
 	return &inputOOOFinder{
-		graceDuration,
+		int64(metricInterval * reorderWindow),
 		prefix,
 		substr,
 
@@ -85,7 +85,7 @@ func (ip *inputOOOFinder) processTrack(metricKey schema.MKey, metricTime int64, 
 	if metricTime > track.LatestTimestamp {
 		track.LatestTimestamp = metricTime
 		ip.tracker[metricKey] = track
-	} else if metricTime+int64(ip.graceDuration.Seconds()) < track.LatestTimestamp {
+	} else if metricTime+ip.reorderBufferGracePeriod < track.LatestTimestamp {
 		// increment grouping counts
 		if ip.groupByName == true {
 			(*ip.groupedByName)[track.Name]++

@@ -20,14 +20,15 @@ type Flags struct {
 	PartitionFrom    int
 	PartitionTo      int
 	graceDurationStr string
+	MetricInterval   int
+	ReorderWindow    int
 	Prefix           string
 	Substr           string
 	GroupByName      bool
 	GroupByTag       string
 
 	// after parsing
-	RunDuration   time.Duration
-	GraceDuration time.Duration
+	RunDuration time.Duration
 }
 
 func NewFlags() *Flags {
@@ -38,7 +39,8 @@ func NewFlags() *Flags {
 	flags.flagSet.StringVar(&flags.Config, "config", "/etc/metrictank/metrictank.ini", "configuration file path")
 	flags.flagSet.IntVar(&flags.PartitionFrom, "partition-from", 0, "the partition to load the index from")
 	flags.flagSet.IntVar(&flags.PartitionTo, "partition-to", -1, "load the index from all partitions up to this one (exclusive). If unset, only the partition defined with \"--partition-from\" is loaded from")
-	flags.flagSet.StringVar(&flags.graceDurationStr, "grace-duration", "0s", "todo")
+	flags.flagSet.IntVar(&flags.MetricInterval, "metric-interval", 30, "the metric interval in seconds")
+	flags.flagSet.IntVar(&flags.ReorderWindow, "reorder-window", 0, "the size of the reorder buffer window")
 	flags.flagSet.StringVar(&flags.Prefix, "prefix", "", "only show metrics with a name that has this prefix")
 	flags.flagSet.StringVar(&flags.Substr, "substr", "", "only show metrics with a name that has this substring")
 	flags.flagSet.BoolVar(&flags.GroupByName, "group-by-name", false, "group out-of-order metrics by name")
@@ -75,11 +77,6 @@ func (flags *Flags) Parse(args []string) {
 		log.Fatalf("failed to parse run duration %s: %s", flags.runDurationStr, err.Error)
 		os.Exit(1)
 	}
-	flags.GraceDuration, err = time.ParseDuration(flags.graceDurationStr)
-	if err != nil {
-		log.Fatalf("failed to parse grace duration %s: %s", flags.graceDurationStr, err.Error)
-		os.Exit(1)
-	}
 
 	if flags.GroupByName == false && flags.GroupByTag == "" {
 		log.Fatalf("must specify one of -group-by-name or -group-by-tag")
@@ -90,12 +87,13 @@ func (flags *Flags) Parse(args []string) {
 func (flags *Flags) Usage() {
 	fmt.Fprintln(os.Stderr, "mt-kafka-mdm-report-out-of-order")
 	fmt.Fprintln(os.Stderr)
-	fmt.Fprintln(os.Stderr, "Inspects what's flowing through kafka (in mdm format) and reports out of order data grouped by metric name or tag (does not take into account reorder buffer)")
+	fmt.Fprintln(os.Stderr, "Inspects what's flowing through kafka (in mdm format) and reports out of order data grouped by metric name or tag, taking into account the reorder buffer)")
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "# Mechanism")
 	fmt.Fprintln(os.Stderr, "* it sniffs points being added on a per-series (metric Id) level")
 	fmt.Fprintln(os.Stderr, "* for every series, tracks the last 'correct' point.  E.g. a point that was able to be added to the series because its timestamp is higher than any previous timestamp")
 	fmt.Fprintln(os.Stderr, "* if for any series, a point comes in with a timestamp equal or lower than the last point correct point - which metrictank would not add unless it falls within the reorder buffer - it triggers an event for this out-of-order point")
+	fmt.Fprintln(os.Stderr, "* the reorder buffer is described by the metric interval and the window size")
 	fmt.Fprintln(os.Stderr, "Usage:")
 	fmt.Fprintln(os.Stderr, "  mt-kafka-mdm-report-out-of-order [flags]")
 	fmt.Fprintln(os.Stderr)
@@ -115,7 +113,7 @@ func (flags *Flags) Usage() {
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "EXAMPLES:")
 	fmt.Fprintln(os.Stderr, "  mt-kafka-mdm-report-out-of-order -group-by-name -config metrictank.ini -partition-from 0")
-	fmt.Fprintln(os.Stderr, "  mt-kafka-mdm-report-out-of-order -grace-duration 30s -group-by-tag namespace -config metrictank.ini -partition-from 0 -partition-to 3")
+	fmt.Fprintln(os.Stderr, "  mt-kafka-mdm-report-out-of-order -metric-interval 30 -reorder-window 5 -group-by-tag namespace -config metrictank.ini -partition-from 0 -partition-to 3")
 }
 
 func ParseFlags() Flags {

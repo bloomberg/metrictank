@@ -32,7 +32,8 @@ func main() {
 	groupedByName := map[string]int{}
 	groupedByTag := map[string]int{}
 	inputOOOFinder := newInputOOOFinder(
-		flags.GraceDuration,
+		flags.MetricInterval,
+		flags.ReorderWindow,
 		flags.Prefix,
 		flags.Substr,
 		flags.PartitionFrom,
