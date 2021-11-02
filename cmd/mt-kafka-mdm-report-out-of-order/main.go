@@ -9,10 +9,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/grafana/metrictank/idx/cassandra"
 	inKafkaMdm "github.com/grafana/metrictank/input/kafkamdm"
 	"github.com/grafana/metrictank/logger"
-	"github.com/grafana/metrictank/schema"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -21,30 +19,6 @@ func configureLogging() {
 	formatter.TimestampFormat = "2006-01-02 15:04:05.000"
 	log.SetFormatter(formatter)
 	log.SetLevel(log.InfoLevel)
-}
-
-func loadMetricDefinitionsFromCassandra(partitionFrom int, partitionTo int) Tracker {
-	cassandra.CliConfig.Enabled = true
-	cassandraIndex := cassandra.New(cassandra.CliConfig)
-	err := cassandraIndex.InitBare()
-	if err != nil {
-		log.Fatalf("error initializing cassandra index: %s", err.Error())
-		os.Exit(1)
-	}
-
-	metricDefinitionSlice := make([]schema.MetricDefinition, 0)
-	for partition := partitionFrom; (partitionTo == -1 && partition == partitionFrom) || (partitionTo > 0 && partition < partitionTo); partition++ {
-		metricDefinitionSlice = cassandraIndex.LoadPartitions([]int32{int32(partition)}, metricDefinitionSlice, time.Now())
-	}
-	metricDefinitions := Tracker{}
-	for _, def := range metricDefinitionSlice {
-		metricDefinitions[def.Id] = Track{
-			Name: def.Name,
-			Tags: def.Tags,
-		}
-	}
-
-	return metricDefinitions
 }
 
 func main() {
@@ -61,7 +35,8 @@ func main() {
 		flags.GraceDuration,
 		flags.Prefix,
 		flags.Substr,
-		loadMetricDefinitionsFromCassandra(flags.PartitionFrom, flags.PartitionTo),
+		flags.PartitionFrom,
+		flags.PartitionTo,
 		flags.GroupByName,
 		&groupedByName,
 		flags.GroupByTag,

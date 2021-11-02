@@ -1,10 +1,12 @@
 package main
 
 import (
+	"os"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/grafana/metrictank/idx/cassandra"
 	"github.com/grafana/metrictank/schema"
 	"github.com/grafana/metrictank/schema/msg"
 	log "github.com/sirupsen/logrus"
@@ -35,7 +37,27 @@ type inputOOOFinder struct {
 	lock sync.Mutex
 }
 
-func newInputOOOFinder(graceDuration time.Duration, prefix string, substr string, tracker Tracker, groupByName bool, groupedByName *map[string]int, groupByTag string, groupedByTag *map[string]int) *inputOOOFinder {
+func newInputOOOFinder(graceDuration time.Duration, prefix string, substr string, partitionFrom int, partitionTo int, groupByName bool, groupedByName *map[string]int, groupByTag string, groupedByTag *map[string]int) *inputOOOFinder {
+	cassandraIndex := cassandra.New(cassandra.CliConfig)
+	err := cassandraIndex.InitBare()
+	if err != nil {
+		log.Fatalf("error initializing cassandra index: %s", err.Error())
+		os.Exit(1)
+	}
+
+	metricDefinitions := make([]schema.MetricDefinition, 0)
+	for partition := partitionFrom; (partitionTo == -1 && partition == partitionFrom) || (partitionTo > 0 && partition < partitionTo); partition++ {
+		metricDefinitions = cassandraIndex.LoadPartitions([]int32{int32(partition)}, metricDefinitions, time.Now())
+	}
+
+	tracker := Tracker{}
+	for _, metricDefinition := range metricDefinitions {
+		tracker[metricDefinition.Id] = Track{
+			Name: metricDefinition.Name,
+			Tags: metricDefinition.Tags,
+		}
+	}
+
 	return &inputOOOFinder{
 		graceDuration,
 		prefix,
