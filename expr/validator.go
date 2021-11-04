@@ -1,6 +1,8 @@
 package expr
 
 import (
+	"time"
+
 	"github.com/grafana/metrictank/consolidation"
 	"github.com/grafana/metrictank/errors"
 	"github.com/raintank/dur"
@@ -75,6 +77,20 @@ func NonNegativePercent(e *expr) error {
 func WithinZeroOneInclusiveInterval(e *expr) error {
 	if e.float < 0 || e.float > 1 {
 		return ErrWithinZeroOneInclusiveInterval
+	}
+	return nil
+}
+
+// maybe IsDateTime?
+func IsATTime(e *expr) error {
+	loc, err := time.LoadLocation("")
+	// todo, figure out if there's a point in using a location ehre at all
+	// todo error chekcing
+
+	now := time.Now()
+	_, err = dur.ParseDateTime(e.str, loc, now, uint32(now.Unix()))
+	if err != nil {
+		return err // todo probably return something else
 	}
 	return nil
 }
