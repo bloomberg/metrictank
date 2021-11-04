@@ -39,8 +39,8 @@ func TestLinearRegression(t *testing.T) {
 		Target: "todo",
 		QueryPatt: "todo",
 		Interval: 60,
-		QueryFrom: 180,//QueryFrom: 1200,
-		QueryTo: 480,//QueryTo: 1500,
+		QueryFrom: 1200,
+		QueryTo: 1500,
 		Datapoints: []schema.Point{
 			{
 				Val: 20,
@@ -69,11 +69,16 @@ func TestLinearRegression(t *testing.T) {
 		},
 	}
 
+	context := Context{
+		from: 1200,
+		to: 1500,
+	}
 	funcLinearRegression := FuncLinearRegression{
 		in: NewMock(in),
 		startSourceAt: "00:03 19700101",
 		endSourceAt: "00:08 19700101",
 	}
+	funcLinearRegression.Context(context)
 	dataMap := initDataMap(in) 
 	actual, err := funcLinearRegression.Exec(dataMap)
 
