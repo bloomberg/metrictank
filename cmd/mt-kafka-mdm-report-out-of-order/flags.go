@@ -82,7 +82,7 @@ func (flags *Flags) Usage() {
 	fmt.Fprintln(os.Stderr, "* it sniffs points being added on a per-series (metric Id) level")
 	fmt.Fprintln(os.Stderr, "* for every series, tracks the last 'correct' point.  E.g. a point that was able to be added to the series because its timestamp is higher than any previous timestamp")
 	fmt.Fprintln(os.Stderr, "* if for any series, a point comes in with a timestamp equal or lower than the last point correct point - which metrictank would not add unless it falls within the reorder buffer - it triggers an event for this out-of-order point")
-	fmt.Fprintln(os.Stderr, "* the reorder buffer is described by the metric interval and the window size")
+	fmt.Fprintln(os.Stderr, "* the reorder buffer is described by the window size")
 	fmt.Fprintln(os.Stderr, "Usage:")
 	fmt.Fprintln(os.Stderr, "  mt-kafka-mdm-report-out-of-order [flags]")
 	fmt.Fprintln(os.Stderr)
@@ -102,7 +102,7 @@ func (flags *Flags) Usage() {
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "EXAMPLES:")
 	fmt.Fprintln(os.Stderr, "  mt-kafka-mdm-report-out-of-order -group-by-name -config metrictank.ini -partition-from 0")
-	fmt.Fprintln(os.Stderr, "  mt-kafka-mdm-report-out-of-order -metric-interval 30 -reorder-window 5 -group-by-tag namespace -config metrictank.ini -partition-from 0 -partition-to 3")
+	fmt.Fprintln(os.Stderr, "  mt-kafka-mdm-report-out-of-order -reorder-window 5 -group-by-tag namespace -config metrictank.ini -partition-from 0 -partition-to 3")
 }
 
 func ParseFlags() Flags {
