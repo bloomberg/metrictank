@@ -113,10 +113,6 @@ func ParseFlags() Flags {
 		flag.Usage()
 		os.Exit(0)
 	}
-	if len(os.Args) < 2 {
-		flag.Usage()
-		os.Exit(-1)
-	}
 
 	flags.Parse(os.Args[1:])
 
