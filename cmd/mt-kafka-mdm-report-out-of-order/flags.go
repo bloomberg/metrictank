@@ -40,6 +40,7 @@ func NewFlags() *Flags {
 	flags.flagSet.BoolVar(&flags.GroupByName, "group-by-name", false, "group out-of-order metrics by name")
 	flags.flagSet.StringVar(&flags.GroupByTag, "group-by-tag", "", "group out-of-order metrics by the specified tag")
 
+	flags.flagSet.Usage = flags.Usage
 	return &flags
 }
 
@@ -108,11 +109,6 @@ func ParseFlags() Flags {
 	flags := NewFlags()
 
 	flag.Usage = flags.Usage
-
-	if len(os.Args) == 2 && (os.Args[1] == "-h" || os.Args[1] == "--help") {
-		flag.Usage()
-		os.Exit(0)
-	}
 
 	flags.Parse(os.Args[1:])
 
