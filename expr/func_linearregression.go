@@ -2,6 +2,7 @@ package expr
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/grafana/metrictank/api/models"
@@ -43,7 +44,6 @@ func (s *FuncLinearRegression) Signature() ([]Arg, []Arg) {
 }
 
 func (s *FuncLinearRegression) Context(context Context) Context {
-	// im assuming from/to correspond to the python startTime/endTime here
 	s.startTargetAt = context.from
 	s.endTargetAt = context.to
 
@@ -57,30 +57,22 @@ func linearRegressionAnalysis(series models.Series, startSourceAt uint32, endSou
 	var sumII float64
 	var sumV float64
 	var sumIV float64
-	for _, v := range series.Datapoints {
-		if v.Ts < startSourceAt { // todo can optimize assuming this is sorted
-			continue
-		}
-		if v.Ts > endSourceAt {
-			break
-		}
 
+	for i := sort.Search(len(series.Datapoints), func(i int) bool { return series.Datapoints[i].Ts >= startSourceAt }); i < len(series.Datapoints) && series.Datapoints[i].Ts <= endSourceAt; i++ {
 		// we can't use the index from the datapoints because missing datapoints
 		// do not exist
 		// todo make this sound more better
-		i := (v.Ts - series.QueryFrom) / series.Interval
-		sumI += float64(i)
-		sumII += float64(i) * float64(i)
-		sumV += v.Val
-		sumIV += float64(i) * v.Val
+		index := (series.Datapoints[i].Ts - series.QueryFrom) / series.Interval
+		sumI += float64(index)
+		sumII += float64(index) * float64(index)
+		sumV += series.Datapoints[i].Val
+		sumIV += float64(index) * series.Datapoints[i].Val
 	}
-	fmt.Println("sumI", sumI, "sumII", sumII, "sumV", sumV, "sumIV", sumIV)
 
 	denominator := n*sumII - sumI*sumI
 	if denominator == 0 {
 		return 0, 0, false
 	}
-	fmt.Println("denominator", denominator)
 
 	factor := (n*sumIV - sumI*sumV) / denominator / float64(series.Interval)         // todo double check interval is correct to use here
 	offset := (sumII*sumV-sumIV*sumI)/denominator - factor*float64(series.QueryFrom) // todo double check queryfrom is correct to use here
@@ -117,12 +109,10 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 	results := []models.Series{}
 	for _, serie := range series {
 		factor, offset, forecast := linearRegressionAnalysis(serie, startSourceAt, endSourceAt)
-		fmt.Println("factor", factor, "offset", offset, "forecast", forecast)
 		if !forecast {
 			continue
 		}
 
-		fmt.Println("size", (s.endTargetAt-s.startTargetAt)/serie.Interval)
 		datapoints := []schema.Point{} //make([]schema.Point, (s.endTargetAt - s.startTargetAt) / serie.Interval)
 		var i uint32
 		for i = 0; i <= (s.endTargetAt-s.startTargetAt)/serie.Interval; i++ {
