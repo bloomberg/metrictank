@@ -16,9 +16,13 @@ func TestLinearRegression(t *testing.T) {
 			},
 			QueryPatt: "test.value",
 			Interval:  60,
-			QueryFrom: 180,
-			QueryTo:   480,
+			QueryFrom: 120,
+			QueryTo:   540,
 			Datapoints: []schema.Point{
+				{
+					Val: -100,
+					Ts:  120,
+				},
 				{
 					Val: 3,
 					Ts:  180,
@@ -34,6 +38,10 @@ func TestLinearRegression(t *testing.T) {
 				{
 					Val: 8,
 					Ts:  480,
+				},
+				{
+					Val: 300,
+					Ts:  540,
 				},
 			},
 		},

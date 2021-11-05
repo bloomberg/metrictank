@@ -53,8 +53,7 @@ func (s *FuncLinearRegression) Context(context Context) Context {
 }
 
 func linearRegressionAnalysis(series models.Series, startSourceAt uint32, endSourceAt uint32) (float64, float64, bool) {
-	n := float64(len(series.Datapoints))
-
+	var n float64
 	var sumI float64
 	var sumII float64
 	var sumV float64
@@ -66,6 +65,7 @@ func linearRegressionAnalysis(series models.Series, startSourceAt uint32, endSou
 		index := float64((series.Datapoints[i].Ts - startSourceAt) / series.Interval)
 		value := series.Datapoints[i].Val
 
+		n++
 		sumI += index
 		sumII += index * index
 		sumV += value
