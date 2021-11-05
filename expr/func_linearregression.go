@@ -11,9 +11,11 @@ import (
 )
 
 type FuncLinearRegression struct {
-	in            GraphiteFunc
+	in GraphiteFunc
+
 	startSourceAt string
 	endSourceAt   string
+
 	startTargetAt uint32
 	endTargetAt   uint32
 }
@@ -59,14 +61,15 @@ func linearRegressionAnalysis(series models.Series, startSourceAt uint32, endSou
 	var sumIV float64
 
 	for i := sort.Search(len(series.Datapoints), func(i int) bool { return series.Datapoints[i].Ts >= startSourceAt }); i < len(series.Datapoints) && series.Datapoints[i].Ts <= endSourceAt; i++ {
-		// we can't use the index from the datapoints because missing datapoints
-		// do not exist
-		// todo make this sound more better
-		index := (series.Datapoints[i].Ts - series.QueryFrom) / series.Interval
-		sumI += float64(index)
-		sumII += float64(index) * float64(index)
-		sumV += series.Datapoints[i].Val
-		sumIV += float64(index) * series.Datapoints[i].Val
+		// The index must be rebuilt from the timestamp because
+		// the points of the series do not include "missing" points.
+		index := float64((series.Datapoints[i].Ts - startSourceAt) / series.Interval)
+		value := series.Datapoints[i].Val
+
+		sumI += index
+		sumII += index * index
+		sumV += value
+		sumIV += index * value
 	}
 
 	denominator := n*sumII - sumI*sumI
@@ -74,8 +77,8 @@ func linearRegressionAnalysis(series models.Series, startSourceAt uint32, endSou
 		return 0, 0, false
 	}
 
-	factor := (n*sumIV - sumI*sumV) / denominator / float64(series.Interval)         // todo double check interval is correct to use here
-	offset := (sumII*sumV-sumIV*sumI)/denominator - factor*float64(series.QueryFrom) // todo double check queryfrom is correct to use here
+	factor := (n*sumIV - sumI*sumV) / denominator / float64(series.Interval)
+	offset := (sumII*sumV-sumIV*sumI)/denominator - factor*float64(startSourceAt)
 	return factor, offset, true
 }
 
