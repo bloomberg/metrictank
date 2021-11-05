@@ -11,6 +11,11 @@ import (
 func TestLinearRegression(t *testing.T) {
 	in := []models.Series{
 		models.Series{
+			Target: "test.value",
+			Tags: map[string]string{
+				"test": "value",
+			},
+			QueryPatt: "test.value",
 			Interval:  60,
 			QueryFrom: 180,
 			QueryTo:   480,
@@ -36,8 +41,12 @@ func TestLinearRegression(t *testing.T) {
 	}
 
 	expected := models.Series{
-		Target:    "todo",
-		QueryPatt: "todo",
+		Target: "linearRegression(test.value, 180, 480)",
+		Tags: map[string]string{
+			"test":              "value",
+			"linearRegressions": "180, 480",
+		},
+		QueryPatt: "linearRegression(test.value, 180, 480)",
 		Interval:  60,
 		QueryFrom: 1200,
 		QueryTo:   1500,
