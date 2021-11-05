@@ -15,16 +15,15 @@ import (
 type Flags struct {
 	flagSet *flag.FlagSet
 
-	RunDuration    time.Duration
-	Config         string
-	PartitionFrom  int
-	PartitionTo    int
-	MetricInterval int
-	ReorderWindow  int
-	Prefix         string
-	Substr         string
-	GroupByName    bool
-	GroupByTag     string
+	RunDuration   time.Duration
+	Config        string
+	PartitionFrom int
+	PartitionTo   int
+	ReorderWindow int
+	Prefix        string
+	Substr        string
+	GroupByName   bool
+	GroupByTag    string
 }
 
 func NewFlags() *Flags {
@@ -35,7 +34,6 @@ func NewFlags() *Flags {
 	flags.flagSet.StringVar(&flags.Config, "config", "/etc/metrictank/metrictank.ini", "configuration file path")
 	flags.flagSet.IntVar(&flags.PartitionFrom, "partition-from", 0, "the partition to load the index from")
 	flags.flagSet.IntVar(&flags.PartitionTo, "partition-to", -1, "load the index from all partitions up to this one (exclusive). If unset, only the partition defined with \"--partition-from\" is loaded from")
-	flags.flagSet.IntVar(&flags.MetricInterval, "metric-interval", 30, "the metric interval in seconds")
 	flags.flagSet.IntVar(&flags.ReorderWindow, "reorder-window", 0, "the size of the reorder buffer window")
 	flags.flagSet.StringVar(&flags.Prefix, "prefix", "", "only show metrics with a name that has this prefix")
 	flags.flagSet.StringVar(&flags.Substr, "substr", "", "only show metrics with a name that has this substring")

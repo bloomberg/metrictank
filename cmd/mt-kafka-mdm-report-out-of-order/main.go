@@ -36,7 +36,6 @@ func main() {
 		flags.Substr,
 		flags.PartitionFrom,
 		flags.PartitionTo,
-		flags.MetricInterval,
 		flags.ReorderWindow,
 		flags.GroupByName,
 		&groupedByName,

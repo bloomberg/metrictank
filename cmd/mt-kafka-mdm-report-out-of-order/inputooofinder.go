@@ -13,8 +13,9 @@ import (
 )
 
 type Track struct {
-	Name string
-	Tags []string
+	Name     string
+	Interval int
+	Tags     []string
 
 	LatestTimestamp int64
 }
@@ -26,8 +27,8 @@ type inputOOOFinder struct {
 	prefix string
 	substr string
 
-	tracker                  Tracker
-	reorderBufferGracePeriod int64
+	tracker       Tracker
+	reorderWindow int
 
 	groupByName   bool
 	groupedByName *map[string]int
@@ -37,7 +38,7 @@ type inputOOOFinder struct {
 	lock sync.Mutex
 }
 
-func newInputOOOFinder(prefix string, substr string, partitionFrom int, partitionTo int, metricInterval int, reorderWindow int, groupByName bool, groupedByName *map[string]int, groupByTag string, groupedByTag *map[string]int) *inputOOOFinder {
+func newInputOOOFinder(prefix string, substr string, partitionFrom int, partitionTo int, reorderWindow int, groupByName bool, groupedByName *map[string]int, groupByTag string, groupedByTag *map[string]int) *inputOOOFinder {
 	cassandraIndex := cassandra.New(cassandra.CliConfig)
 	err := cassandraIndex.InitBare()
 	if err != nil {
@@ -53,8 +54,9 @@ func newInputOOOFinder(prefix string, substr string, partitionFrom int, partitio
 	tracker := Tracker{}
 	for _, metricDefinition := range metricDefinitions {
 		tracker[metricDefinition.Id] = Track{
-			Name: metricDefinition.Name,
-			Tags: metricDefinition.Tags,
+			Name:     metricDefinition.Name,
+			Interval: metricDefinition.Interval,
+			Tags:     metricDefinition.Tags,
 		}
 	}
 
@@ -62,8 +64,8 @@ func newInputOOOFinder(prefix string, substr string, partitionFrom int, partitio
 		prefix: prefix,
 		substr: substr,
 
-		tracker:                  tracker,
-		reorderBufferGracePeriod: int64(metricInterval * reorderWindow),
+		tracker:       tracker,
+		reorderWindow: reorderWindow,
 
 		groupByName:   groupByName,
 		groupedByName: groupedByName,
@@ -85,7 +87,7 @@ func (ip *inputOOOFinder) processTrack(metricKey schema.MKey, metricTime int64, 
 	if metricTime > track.LatestTimestamp {
 		track.LatestTimestamp = metricTime
 		ip.tracker[metricKey] = track
-	} else if metricTime+ip.reorderBufferGracePeriod < track.LatestTimestamp {
+	} else if metricTime+int64(track.Interval*ip.reorderWindow) < track.LatestTimestamp {
 		// increment grouping counts
 		if ip.groupByName == true {
 			(*ip.groupedByName)[track.Name]++
