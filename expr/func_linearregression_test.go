@@ -7,9 +7,34 @@ import (
 	"github.com/grafana/metrictank/schema"
 )
 
+
+func TestLinearRegressionInvalidStartSourceAt(t *testing.T) {
+	funcLinearRegression := FuncLinearRegression{
+		startSourceAt: "test",
+	}
+
+	_, err := funcLinearRegression.Exec(initDataMap([]models.Series{}))
+	if err == nil {
+		t.Fatal("invalid 'startSourceAt' should result in error")
+	}
+}
+
+func TestLinearRegressionInvalidEndSourceAt(t *testing.T) {
+	funcLinearRegression := FuncLinearRegression{
+		endSourceAt:   "test",
+	}
+
+	_, err := funcLinearRegression.Exec(initDataMap([]models.Series{}))
+	if err == nil {
+		t.Fatal("invalid 'endSourceAt' should result in error")
+	}
+}
+
+func TestLinearRegressionDefaults(t *testing.T) {
+	// todo
+}
 func TestLinearRegression(t *testing.T) {
-	in := []models.Series{
-		models.Series{
+	in := []models.Series{{
 			Target: "test.value",
 			Tags: map[string]string{
 				"test": "value",
@@ -44,10 +69,9 @@ func TestLinearRegression(t *testing.T) {
 					Ts:  540,
 				},
 			},
-		},
-	}
+	}}
 
-	expected := models.Series{
+	expected := []models.Series{{
 		Target: "linearRegression(test.value, 180, 480)",
 		Tags: map[string]string{
 			"test":              "value",
@@ -83,7 +107,7 @@ func TestLinearRegression(t *testing.T) {
 				Ts:  1500,
 			},
 		},
-	}
+	}}
 
 	context := Context{
 		from: 1200,
@@ -98,34 +122,8 @@ func TestLinearRegression(t *testing.T) {
 	dataMap := initDataMap(in)
 	actual, err := funcLinearRegression.Exec(dataMap)
 
-	if err := equalOutput([]models.Series{expected}, actual, nil, err); err != nil {
+	if err := equalOutput(expected, actual, nil, err); err != nil {
 		t.Fatal(err)
 	}
 	// todo check tags? its pretty wonky
-}
-
-func TestLinearRegressionInvalidStartSourceAt(t *testing.T) {
-	funcLinearRegression := FuncLinearRegression{
-		startSourceAt: "test",
-	}
-
-	_, err := funcLinearRegression.Exec(initDataMap([]models.Series{}))
-	if err == nil {
-		t.Fatal("invalid 'startSourceAt' should result in error")
-	}
-}
-
-func TestLinearRegressionInvalidEndSourceAt(t *testing.T) {
-	funcLinearRegression := FuncLinearRegression{
-		startSourceAt: "test",
-	}
-
-	_, err := funcLinearRegression.Exec(initDataMap([]models.Series{}))
-	if err == nil {
-		t.Fatal("invalid 'endSourceAt' should result in error")
-	}
-}
-
-func TestLinearRegressionDefaults(t *testing.T) {
-	// todo
 }
