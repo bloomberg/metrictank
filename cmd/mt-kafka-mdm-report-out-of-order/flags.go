@@ -15,7 +15,7 @@ import (
 type Flags struct {
 	flagSet *flag.FlagSet
 
-	runDurationStr string
+	RunDuration    time.Duration
 	Config         string
 	PartitionFrom  int
 	PartitionTo    int
@@ -25,16 +25,13 @@ type Flags struct {
 	Substr         string
 	GroupByName    bool
 	GroupByTag     string
-
-	// after parsing
-	RunDuration time.Duration
 }
 
 func NewFlags() *Flags {
 	var flags Flags
 
 	flags.flagSet = flag.NewFlagSet("application flags", flag.ExitOnError)
-	flags.flagSet.StringVar(&flags.runDurationStr, "run-duration", "5m", "the duration of time to run the program")
+	flags.flagSet.DurationVar(&flags.RunDuration, "run-duration", 5*time.Minute, "the duration of time to run the program")
 	flags.flagSet.StringVar(&flags.Config, "config", "/etc/metrictank/metrictank.ini", "configuration file path")
 	flags.flagSet.IntVar(&flags.PartitionFrom, "partition-from", 0, "the partition to load the index from")
 	flags.flagSet.IntVar(&flags.PartitionTo, "partition-to", -1, "load the index from all partitions up to this one (exclusive). If unset, only the partition defined with \"--partition-from\" is loaded from")
@@ -70,12 +67,6 @@ func (flags *Flags) Parse(args []string) {
 	_ = cassandra.ConfigSetup()
 	inKafkaMdm.ConfigSetup()
 	config.Parse()
-
-	flags.RunDuration, err = time.ParseDuration(flags.runDurationStr)
-	if err != nil {
-		log.Fatalf("failed to parse run duration %s: %s", flags.runDurationStr, err.Error)
-		os.Exit(1)
-	}
 
 	if flags.GroupByName == false && flags.GroupByTag == "" {
 		log.Fatalf("must specify one of -group-by-name or -group-by-tag")
