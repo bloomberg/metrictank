@@ -58,6 +58,13 @@ func linearRegressionAnalysis(series models.Series, startSourceAt uint32, endSou
 	var sumV float64
 	var sumIV float64
 	for _, v := range series.Datapoints {
+		if v.Ts < startSourceAt { // todo can optimize assuming this is sorted
+			continue
+		}
+		if v.Ts > endSourceAt {
+			break
+		}
+
 		// we can't use the index from the datapoints because missing datapoints
 		// do not exist
 		// todo make this sound more better
@@ -89,12 +96,12 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 	now := time.Now()
 
 	// todo this should account for empty params assuming thats how unspecified optional string args manifest
-	from, err := dur.ParseDateTime(s.startSourceAt, loc, now, uint32(now.Add(-24*time.Hour).Unix()))
+	startSourceAt, err := dur.ParseDateTime(s.startSourceAt, loc, now, uint32(now.Add(-24*time.Hour).Unix()))
 	if err != nil {
 		return nil, err // todo wrap
 	}
 
-	to, err := dur.ParseDateTime(s.endSourceAt, loc, now, uint32(now.Unix()))
+	endSourceAt, err := dur.ParseDateTime(s.endSourceAt, loc, now, uint32(now.Unix()))
 	if err != nil {
 		return nil, err // todo wrap
 	}
@@ -109,7 +116,7 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 	// these values come from the request context but we don't have access to that context in Exec..
 	results := []models.Series{}
 	for _, serie := range series {
-		factor, offset, forecast := linearRegressionAnalysis(serie, from, to)
+		factor, offset, forecast := linearRegressionAnalysis(serie, startSourceAt, endSourceAt)
 		fmt.Println("factor", factor, "offset", offset, "forecast", forecast)
 		if !forecast {
 			continue
@@ -125,12 +132,12 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 			})
 		}
 
-		name := fmt.Sprintf("linearRegression(%s, %d, %d)", serie.Target, from, to)
+		name := fmt.Sprintf("linearRegression(%s, %d, %d)", serie.Target, startSourceAt, endSourceAt)
 
 		newSeries := serie.Copy([]schema.Point{})
 		newSeries.Target = name
 		newSeries.Datapoints = datapoints
-		newSeries.Tags["linearRegressions"] = fmt.Sprintf("%d, %d", from, to)
+		newSeries.Tags["linearRegressions"] = fmt.Sprintf("%d, %d", startSourceAt, endSourceAt)
 		newSeries.QueryPatt = name
 		newSeries.QueryFrom = s.startTargetAt
 		newSeries.QueryTo = s.endTargetAt
