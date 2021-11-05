@@ -1,21 +1,20 @@
 package expr
 
 import (
-	//"time"
 	"fmt"
+	"time"
 
 	"github.com/grafana/metrictank/api/models"
 	"github.com/grafana/metrictank/schema"
-	//"github.com/raintank/dur"
+	"github.com/raintank/dur"
 )
 
 type FuncLinearRegression struct {
 	in            GraphiteFunc
 	startSourceAt string
 	endSourceAt   string
-
-	start uint32
-	end uint32
+	startTargetAt uint32
+	endTargetAt   uint32
 }
 
 func NewLinearRegression() GraphiteFunc {
@@ -44,13 +43,14 @@ func (s *FuncLinearRegression) Signature() ([]Arg, []Arg) {
 }
 
 func (s *FuncLinearRegression) Context(context Context) Context {
-	s.start = context.from
-	s.end = context.to 
+	// im assuming from/to correspond to the python startTime/endTime here
+	s.startTargetAt = context.from
+	s.endTargetAt = context.to
 
 	return context
 }
 
-func linearRegressionAnalysis(series models.Series) (float64, float64, bool) {
+func linearRegressionAnalysis(series models.Series, startSourceAt uint32, endSourceAt uint32) (float64, float64, bool) {
 	n := float64(len(series.Datapoints))
 
 	var sumI float64
@@ -58,14 +58,14 @@ func linearRegressionAnalysis(series models.Series) (float64, float64, bool) {
 	var sumV float64
 	var sumIV float64
 	for _, v := range series.Datapoints {
-			// we can't use the index from the datapoints because missing datapoints
-			// do not exist
-			// todo make this sound more better
-			i := (v.Ts - series.QueryFrom) / series.Interval
-			sumI += float64(i)
-			sumII += float64(i) * float64(i)
-			sumV += v.Val
-			sumIV += float64(i) * v.Val
+		// we can't use the index from the datapoints because missing datapoints
+		// do not exist
+		// todo make this sound more better
+		i := (v.Ts - series.QueryFrom) / series.Interval
+		sumI += float64(i)
+		sumII += float64(i) * float64(i)
+		sumV += v.Val
+		sumIV += float64(i) * v.Val
 	}
 	fmt.Println("sumI", sumI, "sumII", sumII, "sumV", sumV, "sumIV", sumIV)
 
@@ -81,7 +81,7 @@ func linearRegressionAnalysis(series models.Series) (float64, float64, bool) {
 }
 
 func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
-	/*loc, err := time.LoadLocation("") // todo, no idea what timezone to use here, utc is a reasonable default
+	loc, err := time.LoadLocation("") // todo, no idea what timezone to use here, utc is a reasonable default
 	if err != nil {
 		return nil, err // todo wrap
 	}
@@ -89,7 +89,7 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 	now := time.Now()
 
 	// todo this should account for empty params assuming thats how unspecified optional string args manifest
-	/*from, err := dur.ParseDateTime(s.startSourceAt, loc, now, uint32(now.Add(-24*time.Hour).Unix()))
+	from, err := dur.ParseDateTime(s.startSourceAt, loc, now, uint32(now.Add(-24*time.Hour).Unix()))
 	if err != nil {
 		return nil, err // todo wrap
 	}
@@ -97,7 +97,7 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 	to, err := dur.ParseDateTime(s.endSourceAt, loc, now, uint32(now.Unix()))
 	if err != nil {
 		return nil, err // todo wrap
-	}*/// todo pass these into the linear regression function since that series might have more data than what we want to poll from
+	}
 
 	// todo update context.from and .to if needed?
 
@@ -109,35 +109,36 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 	// these values come from the request context but we don't have access to that context in Exec..
 	results := []models.Series{}
 	for _, serie := range series {
-		factor, offset, forecast := linearRegressionAnalysis(serie)
+		factor, offset, forecast := linearRegressionAnalysis(serie, from, to)
 		fmt.Println("factor", factor, "offset", offset, "forecast", forecast)
 		if !forecast {
 			continue
 		}
 
-		fmt.Println("size", (s.end - s.start) / serie.Interval)
-		datapoints := []schema.Point{}//make([]schema.Point, (s.end - s.start) / serie.Interval)
+		fmt.Println("size", (s.endTargetAt-s.startTargetAt)/serie.Interval)
+		datapoints := []schema.Point{} //make([]schema.Point, (s.endTargetAt - s.startTargetAt) / serie.Interval)
 		var i uint32
-		for i = 0; i <= (s.end - s.start) / serie.Interval; i++ {//for i, _ := range serie.Datapoints {
+		for i = 0; i <= (s.endTargetAt-s.startTargetAt)/serie.Interval; i++ {
 			datapoints = append(datapoints, schema.Point{
-				Val: offset + (float64(s.start) + float64(i) * float64(serie.Interval)) * factor,
-				Ts: s.start + i * serie.Interval,
+				Val: offset + (float64(s.startTargetAt)+float64(i)*float64(serie.Interval))*factor,
+				Ts:  s.startTargetAt + i*serie.Interval,
 			})
 		}
 
+		name := fmt.Sprintf("linearRegression(%s, %d, %d)", serie.Target, from, to)
 		newSeries := models.Series{
-			Target: "todo",
-			Tags: map[string]string{},
-			Interval: serie.Interval,
-			QueryPatt: "todo",
-			QueryFrom: s.start,
-			QueryTo: s.end,
-			QueryCons: serie.QueryCons,
+			Target:       name,
+			Tags:         map[string]string{},
+			Interval:     serie.Interval,
+			QueryPatt:    name,
+			QueryFrom:    s.startTargetAt,
+			QueryTo:      s.endTargetAt,
+			QueryCons:    serie.QueryCons,
 			Consolidator: serie.Consolidator,
-			QueryMDP: serie.QueryMDP,
+			QueryMDP:     serie.QueryMDP,
 			QueryPNGroup: serie.QueryPNGroup,
-			Meta: serie.Meta,
-			Datapoints: datapoints,
+			Meta:         serie.Meta,
+			Datapoints:   datapoints,
 		}
 
 		results = append(results, newSeries)
