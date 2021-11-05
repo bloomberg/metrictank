@@ -103,3 +103,29 @@ func TestLinearRegression(t *testing.T) {
 	}
 	// todo check tags? its pretty wonky
 }
+
+func TestLinearRegressionInvalidStartSourceAt(t *testing.T) {
+	funcLinearRegression := FuncLinearRegression{
+		startSourceAt: "test",
+	}
+
+	_, err := funcLinearRegression.Exec(initDataMap([]models.Series{}))
+	if err == nil {
+		t.Fatal("invalid 'startSourceAt' should result in error")
+	}
+}
+
+func TestLinearRegressionInvalidEndSourceAt(t *testing.T) {
+	funcLinearRegression := FuncLinearRegression{
+		startSourceAt: "test",
+	}
+
+	_, err := funcLinearRegression.Exec(initDataMap([]models.Series{}))
+	if err == nil {
+		t.Fatal("invalid 'endSourceAt' should result in error")
+	}
+}
+
+func TestLinearRegressionDefaults(t *testing.T) {
+	// todo
+}
