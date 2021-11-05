@@ -1,7 +1,6 @@
 package expr
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/grafana/metrictank/api/models"
@@ -91,9 +90,8 @@ func TestLinearRegression(t *testing.T) {
 	dataMap := initDataMap(in)
 	actual, err := funcLinearRegression.Exec(dataMap)
 
-	fmt.Println("expected", expected)
-	fmt.Println("actual", actual)
 	if err := equalOutput([]models.Series{expected}, actual, nil, err); err != nil {
 		t.Fatal(err)
 	}
+	// todo check tags? its pretty wonky
 }
