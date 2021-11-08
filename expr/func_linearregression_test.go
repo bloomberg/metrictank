@@ -29,9 +29,6 @@ func TestLinearRegressionInvalidEndSourceAt(t *testing.T) {
 	}
 }
 
-func TestLinearRegressionDefaults(t *testing.T) {
-	// todo
-}
 func TestLinearRegression(t *testing.T) {
 	in := []models.Series{{
 		Target: "test.value",

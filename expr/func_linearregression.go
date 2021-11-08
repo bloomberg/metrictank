@@ -85,20 +85,21 @@ func linearRegressionAnalysis(series models.Series, startSourceAt uint32, endSou
 func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 	loc, err := time.LoadLocation("") // todo, no idea what timezone to use here, utc is a reasonable default
 	if err != nil {
-		return nil, err // todo wrap
+		return nil, fmt.Errorf("failed to load location: %w", err)
 	}
 
 	now := time.Now()
 
-	// todo this should account for empty params assuming thats how unspecified optional string args manifest
-	startSourceAt, err := dur.ParseDateTime(s.startSourceAt, loc, now, uint32(now.Add(-24*time.Hour).Unix()))
+	defaultStartSourceAt := uint32(now.Add(-24 * time.Hour).Unix())
+	startSourceAt, err := dur.ParseDateTime(s.startSourceAt, loc, now, defaultStartSourceAt)
 	if err != nil {
-		return nil, err // todo wrap
+		return nil, fmt.Errorf("failed to parse 'startSourceAt' argument %q: %w", s.startSourceAt, err)
 	}
 
-	endSourceAt, err := dur.ParseDateTime(s.endSourceAt, loc, now, uint32(now.Unix()))
+	defaultEndSourceAt := uint32(now.Unix())
+	endSourceAt, err := dur.ParseDateTime(s.endSourceAt, loc, now, defaultEndSourceAt)
 	if err != nil {
-		return nil, err // todo wrap
+		return nil, fmt.Errorf("failed to parse 'endSourceAt' argument %q: %w", s.endSourceAt, err)
 	}
 
 	// todo update context.from and .to if needed?
@@ -108,7 +109,6 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 		return nil, err
 	}
 
-	// these values come from the request context but we don't have access to that context in Exec..
 	results := []models.Series{}
 	for _, serie := range series {
 		factor, offset, forecast := linearRegressionAnalysis(serie, startSourceAt, endSourceAt)
@@ -117,15 +117,18 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 		}
 
 		datapoints := []schema.Point{}
-		var i uint32
-		for i = 0; i <= (s.endTargetAt-s.startTargetAt)/serie.Interval; i++ {
-			datapoints = append(datapoints, schema.Point{
-				Val: offset + (float64(s.startTargetAt)+float64(i)*float64(serie.Interval))*factor,
-				Ts:  s.startTargetAt + i*serie.Interval,
-			})
+		{
+			var i uint32
+			for i = 0; i <= (s.endTargetAt-s.startTargetAt)/serie.Interval; i++ {
+				datapoints = append(datapoints, schema.Point{
+					Val: offset + (float64(s.startTargetAt)+float64(i)*float64(serie.Interval))*factor,
+					Ts:  s.startTargetAt + i*serie.Interval,
+				})
+			}
 		}
 
 		name := fmt.Sprintf("linearRegression(%s, %d, %d)", serie.Target, startSourceAt, endSourceAt)
+
 		newSeries := serie.Copy([]schema.Point{})
 		newSeries.Target = name
 		newSeries.Datapoints = datapoints
@@ -135,6 +138,5 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 		newSeries.QueryTo = s.endTargetAt
 		results = append(results, newSeries)
 	}
-
 	return results, nil
 }
