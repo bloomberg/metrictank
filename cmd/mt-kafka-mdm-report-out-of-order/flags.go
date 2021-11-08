@@ -107,7 +107,7 @@ func (flags *Flags) Usage() {
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "EXAMPLES:")
 	fmt.Fprintln(os.Stderr, "  mt-kafka-mdm-report-out-of-order -group-by-name -config metrictank.ini -partition-from 0")
-	fmt.Fprintln(os.Stderr, "  mt-kafka-mdm-report-out-of-order -reorder-window 5 -group-by-tag namespace -config metrictank.ini -partition-from 0 -partition-to 3")
+	fmt.Fprintln(os.Stderr, "  mt-kafka-mdm-report-out-of-order -group-by-name -group-by-tag namespace -config metrictank.ini -partition-from 0 -partition-to 3 -reorder-window 5 -run-duration 5m")
 }
 
 func ParseFlags() Flags {
