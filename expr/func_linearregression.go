@@ -116,7 +116,7 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 			continue
 		}
 
-		datapoints := []schema.Point{} //make([]schema.Point, (s.endTargetAt - s.startTargetAt) / serie.Interval)
+		datapoints := []schema.Point{}
 		var i uint32
 		for i = 0; i <= (s.endTargetAt-s.startTargetAt)/serie.Interval; i++ {
 			datapoints = append(datapoints, schema.Point{
@@ -126,7 +126,6 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 		}
 
 		name := fmt.Sprintf("linearRegression(%s, %d, %d)", serie.Target, startSourceAt, endSourceAt)
-
 		newSeries := serie.Copy([]schema.Point{})
 		newSeries.Target = name
 		newSeries.Datapoints = datapoints
@@ -134,7 +133,6 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 		newSeries.QueryPatt = name
 		newSeries.QueryFrom = s.startTargetAt
 		newSeries.QueryTo = s.endTargetAt
-
 		results = append(results, newSeries)
 	}
 

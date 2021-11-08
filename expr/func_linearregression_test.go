@@ -7,7 +7,6 @@ import (
 	"github.com/grafana/metrictank/schema"
 )
 
-
 func TestLinearRegressionInvalidStartSourceAt(t *testing.T) {
 	funcLinearRegression := FuncLinearRegression{
 		startSourceAt: "test",
@@ -21,7 +20,7 @@ func TestLinearRegressionInvalidStartSourceAt(t *testing.T) {
 
 func TestLinearRegressionInvalidEndSourceAt(t *testing.T) {
 	funcLinearRegression := FuncLinearRegression{
-		endSourceAt:   "test",
+		endSourceAt: "test",
 	}
 
 	_, err := funcLinearRegression.Exec(initDataMap([]models.Series{}))
@@ -35,40 +34,40 @@ func TestLinearRegressionDefaults(t *testing.T) {
 }
 func TestLinearRegression(t *testing.T) {
 	in := []models.Series{{
-			Target: "test.value",
-			Tags: map[string]string{
-				"test": "value",
+		Target: "test.value",
+		Tags: map[string]string{
+			"test": "value",
+		},
+		QueryPatt: "test.value",
+		Interval:  60,
+		QueryFrom: 120,
+		QueryTo:   540,
+		Datapoints: []schema.Point{
+			{
+				Val: -100,
+				Ts:  120,
 			},
-			QueryPatt: "test.value",
-			Interval:  60,
-			QueryFrom: 120,
-			QueryTo:   540,
-			Datapoints: []schema.Point{
-				{
-					Val: -100,
-					Ts:  120,
-				},
-				{
-					Val: 3,
-					Ts:  180,
-				},
-				{
-					Val: 5,
-					Ts:  300,
-				},
-				{
-					Val: 6,
-					Ts:  360,
-				},
-				{
-					Val: 8,
-					Ts:  480,
-				},
-				{
-					Val: 300,
-					Ts:  540,
-				},
+			{
+				Val: 3,
+				Ts:  180,
 			},
+			{
+				Val: 5,
+				Ts:  300,
+			},
+			{
+				Val: 6,
+				Ts:  360,
+			},
+			{
+				Val: 8,
+				Ts:  480,
+			},
+			{
+				Val: 300,
+				Ts:  540,
+			},
+		},
 	}}
 
 	expected := []models.Series{{
@@ -109,21 +108,21 @@ func TestLinearRegression(t *testing.T) {
 		},
 	}}
 
-	context := Context{
-		from: 1200,
-		to:   1500,
-	}
 	funcLinearRegression := FuncLinearRegression{
 		in:            NewMock(in),
 		startSourceAt: "00:03 19700101",
 		endSourceAt:   "00:08 19700101",
 	}
-	funcLinearRegression.Context(context)
-	dataMap := initDataMap(in)
-	actual, err := funcLinearRegression.Exec(dataMap)
+	funcLinearRegression.Context(Context{
+		from: 1200,
+		to:   1500,
+	})
 
+	actual, err := funcLinearRegression.Exec(initDataMap(in))
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := equalOutput(expected, actual, nil, err); err != nil {
 		t.Fatal(err)
 	}
-	// todo check tags? its pretty wonky
 }
