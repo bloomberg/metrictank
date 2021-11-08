@@ -23,7 +23,7 @@ type Track struct {
 
 type Tracker map[schema.MKey]Track
 
-// find out of order metrics
+// find out-of-order and duplicate metrics
 type inputOOOFinder struct {
 	prefix string
 	substr string
