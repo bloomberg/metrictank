@@ -73,7 +73,7 @@ func (flags *Flags) Parse(args []string) {
 	}
 
 	if flags.ReorderWindow < 1 {
-		log.Fatalf("reorder window must be greater than zero")
+		log.Fatalf("-reorder-window must be greater than zero")
 		os.Exit(1)
 	}
 }
