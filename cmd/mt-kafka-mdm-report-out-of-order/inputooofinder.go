@@ -108,8 +108,7 @@ func (ip *inputOOOFinder) processTrack(metricKey schema.MKey, metricTime int64, 
 		return
 	}
 
-	/* purged*/
-	_, err := track.reorderBuffer.Add(uint32(metricTime), 0 /* todo pretty sure we dont need val unless we want to log it */)
+	_, err := track.reorderBuffer.Add(uint32(metricTime), 0) // ignore value
 	if err == errors.ErrMetricTooOld {
 		ip.incrementGroupings(ip.outOfOrderGroupedByName, ip.outOfOrderGroupedByTag, track)
 	} else if err == errors.ErrMetricNewValueForTimestamp {

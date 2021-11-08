@@ -62,33 +62,26 @@ func main() {
 	}
 	kafkaMdm.Stop()
 
-	log.Info("todo out of order")
 	if flags.GroupByName {
-		log.Info("grouped by name:")
+		log.Info("out-of-order metrics grouped by name:")
 		for key, value := range outOfOrderGroupedByName {
-			log.Infof("name=%q count=%d", key, value)
+			log.Infof("out-of-order name=%q count=%d", key, value)
 		}
-	}
-	if flags.GroupByTag != "" {
-		log.Info("grouped by tag:")
-		for key, value := range outOfOrderGroupedByTag {
-			log.Infof("tag=%q count=%d", key, value)
-		}
-	}
 
-	// todo rework this a bit
-	// if enabled or always on
-	log.Info("todo duplicates")
-	if flags.GroupByName {
-		log.Info("grouped by name:")
+		log.Info("duplicate metrics grouped by name:")
 		for key, value := range duplicatesGroupedByName {
-			log.Infof("name=%q count=%d", key, value)
+			log.Infof("duplicate name=%q count=%d", key, value)
 		}
 	}
 	if flags.GroupByTag != "" {
-		log.Info("grouped by tag:")
+		log.Info("out-of-order metrics grouped by tag:")
+		for key, value := range outOfOrderGroupedByTag {
+			log.Infof("out-of-order tag=%q count=%d", key, value)
+		}
+
+		log.Info("duplicate metrics grouped by tag:")
 		for key, value := range duplicatesGroupedByTag {
-			log.Infof("tag=%q count=%d", key, value)
+			log.Infof("duplicate tag=%q count=%d", key, value)
 		}
 	}
 }
