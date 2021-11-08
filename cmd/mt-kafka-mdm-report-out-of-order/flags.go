@@ -35,8 +35,8 @@ func NewFlags() *Flags {
 	flags.flagSet.IntVar(&flags.PartitionFrom, "partition-from", 0, "the partition to load the index from")
 	flags.flagSet.IntVar(&flags.PartitionTo, "partition-to", -1, "load the index from all partitions up to this one (exclusive). If unset, only the partition defined with \"--partition-from\" is loaded from")
 	flags.flagSet.UintVar(&flags.ReorderWindow, "reorder-window", 1, "the size of the reorder buffer window")
-	flags.flagSet.StringVar(&flags.Prefix, "prefix", "", "only show metrics with a name that has this prefix")
-	flags.flagSet.StringVar(&flags.Substr, "substr", "", "only show metrics with a name that has this substring")
+	flags.flagSet.StringVar(&flags.Prefix, "prefix", "", "only report metrics with a name that has this prefix")
+	flags.flagSet.StringVar(&flags.Substr, "substr", "", "only report metrics with a name that has this substring")
 	flags.flagSet.BoolVar(&flags.GroupByName, "group-by-name", false, "group out-of-order metrics by name")
 	flags.flagSet.StringVar(&flags.GroupByTag, "group-by-tag", "", "group out-of-order metrics by the specified tag")
 
