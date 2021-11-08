@@ -71,6 +71,11 @@ func (flags *Flags) Parse(args []string) {
 		log.Fatalf("must specify one of -group-by-name or -group-by-tag")
 		os.Exit(1)
 	}
+
+	if flags.ReorderWindow < 1 {
+		log.Fatalf("reorder window must be greater than zero")
+		os.Exit(1)
+	}
 }
 
 func (flags *Flags) Usage() {

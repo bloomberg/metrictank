@@ -29,8 +29,10 @@ func main() {
 	inKafkaMdm.ConfigProcess("mt-kafka-mdm-report-out-of-order" + strconv.Itoa(rand.Int()))
 	kafkaMdm := inKafkaMdm.New()
 
-	groupedByName := map[string]int{}
-	groupedByTag := map[string]int{}
+	outOfOrderGroupedByName := map[string]int{}
+	duplicatesGroupedByName := map[string]int{}
+	outOfOrderGroupedByTag := map[string]int{}
+	duplicatesGroupedByTag := map[string]int{}
 	inputOOOFinder := newInputOOOFinder(
 		flags.Prefix,
 		flags.Substr,
@@ -38,9 +40,11 @@ func main() {
 		flags.PartitionTo,
 		flags.ReorderWindow,
 		flags.GroupByName,
-		&groupedByName,
+		&outOfOrderGroupedByName,
+		&duplicatesGroupedByName,
 		flags.GroupByTag,
-		&groupedByTag,
+		&outOfOrderGroupedByTag,
+		&duplicatesGroupedByTag,
 	)
 
 	sigChan := make(chan os.Signal, 1)
@@ -58,16 +62,33 @@ func main() {
 	}
 	kafkaMdm.Stop()
 
+	log.Info("todo out of order")
 	if flags.GroupByName {
 		log.Info("grouped by name:")
-		for key, value := range groupedByName {
-			log.Infof("name=%s count=%d", key, value)
+		for key, value := range outOfOrderGroupedByName {
+			log.Infof("name=%q count=%d", key, value)
 		}
 	}
 	if flags.GroupByTag != "" {
 		log.Info("grouped by tag:")
-		for key, value := range groupedByTag {
-			log.Infof("tag=%s count=%d", key, value)
+		for key, value := range outOfOrderGroupedByTag {
+			log.Infof("tag=%q count=%d", key, value)
+		}
+	}
+
+	// todo rework this a bit
+	// if enabled or always on
+	log.Info("todo duplicates")
+	if flags.GroupByName {
+		log.Info("grouped by name:")
+		for key, value := range duplicatesGroupedByName {
+			log.Infof("name=%q count=%d", key, value)
+		}
+	}
+	if flags.GroupByTag != "" {
+		log.Info("grouped by tag:")
+		for key, value := range duplicatesGroupedByTag {
+			log.Infof("tag=%q count=%d", key, value)
 		}
 	}
 }
