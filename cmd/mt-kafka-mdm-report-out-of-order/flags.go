@@ -68,7 +68,7 @@ func (flags *Flags) Parse(args []string) {
 	config.Parse()
 
 	if flags.GroupByName == false && flags.GroupByTag == "" {
-		log.Fatalf("must specify one of -group-by-name or -group-by-tag")
+		log.Fatalf("must specify at least one of -group-by-name or -group-by-tag")
 		os.Exit(1)
 	}
 
