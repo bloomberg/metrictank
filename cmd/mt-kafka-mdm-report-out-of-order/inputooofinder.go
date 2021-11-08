@@ -28,7 +28,8 @@ type inputOOOFinder struct {
 	prefix string
 	substr string
 
-	tracker Tracker
+	reorderWindow uint32
+	tracker       Tracker
 
 	groupByName             bool
 	outOfOrderGroupedByName *map[string]int
@@ -66,7 +67,8 @@ func newInputOOOFinder(prefix string, substr string, partitionFrom int, partitio
 		prefix: prefix,
 		substr: substr,
 
-		tracker: tracker,
+		reorderWindow: reorderWindow,
+		tracker:       tracker,
 
 		groupByName:             groupByName,
 		outOfOrderGroupedByName: outOfOrderGroupedByName,
@@ -129,8 +131,9 @@ func (ip *inputOOOFinder) ProcessMetricData(metric *schema.MetricData, partition
 	track, exists := ip.tracker[metricKey]
 	if !exists {
 		ip.tracker[metricKey] = Track{
-			Name: metric.Name,
-			Tags: metric.Tags,
+			Name:          metric.Name,
+			Tags:          metric.Tags,
+			reorderBuffer: mdata.NewReorderBuffer(ip.reorderWindow, uint32(metric.Interval), false),
 		}
 		return
 	}
