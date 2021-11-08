@@ -100,7 +100,7 @@ func (ip *inputOOOFinder) incrementGroupings(groupedByName *map[string]int, grou
 	}
 }
 
-func (ip *inputOOOFinder) processTrack(metricKey schema.MKey, metricTime int64, track Track) {
+func (ip *inputOOOFinder) processTrack(metricKey schema.MKey, metricTime int64, track Track, partition int32) {
 	if ip.prefix != "" && !strings.HasPrefix(track.Name, ip.prefix) {
 		return
 	}
@@ -114,7 +114,7 @@ func (ip *inputOOOFinder) processTrack(metricKey schema.MKey, metricTime int64, 
 	} else if err == errors.ErrMetricNewValueForTimestamp {
 		ip.incrementGroupings(ip.duplicatesGroupedByName, ip.duplicatesGroupedByTag, track)
 	} else if err != nil {
-		log.Errorf("failed to add metric %q to reorder buffer: %s", track.Name, err)
+		log.Errorf("failed to add metric with name=%q and timestamp=%d from partition=%d to reorder buffer: %s", track.Name, metricTime, partition, err)
 	}
 }
 
@@ -137,7 +137,7 @@ func (ip *inputOOOFinder) ProcessMetricData(metric *schema.MetricData, partition
 		return
 	}
 
-	ip.processTrack(metricKey, metric.Time, track)
+	ip.processTrack(metricKey, metric.Time, track, partition)
 }
 
 func (ip *inputOOOFinder) ProcessMetricPoint(mp schema.MetricPoint, format msg.Format, partition int32) {
@@ -146,11 +146,11 @@ func (ip *inputOOOFinder) ProcessMetricPoint(mp schema.MetricPoint, format msg.F
 
 	track, exists := ip.tracker[mp.MKey]
 	if !exists {
-		log.Errorf("track for key=%v in partition=%d not found", mp.MKey, partition)
+		log.Errorf("track for metric with key=%v from partition=%d not found", mp.MKey, partition)
 		return
 	}
 
-	ip.processTrack(mp.MKey, int64(mp.Time), track)
+	ip.processTrack(mp.MKey, int64(mp.Time), track, partition)
 }
 
 func (ip *inputOOOFinder) ProcessIndexControlMsg(msg schema.ControlMsg, partition int32) {
