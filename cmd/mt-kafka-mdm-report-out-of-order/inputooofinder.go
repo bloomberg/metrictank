@@ -28,8 +28,7 @@ type inputOOOFinder struct {
 	prefix string
 	substr string
 
-	tracker       Tracker
-	reorderWindow int
+	tracker Tracker
 
 	groupByName             bool
 	outOfOrderGroupedByName *map[string]int
@@ -41,7 +40,7 @@ type inputOOOFinder struct {
 	lock sync.Mutex
 }
 
-func newInputOOOFinder(prefix string, substr string, partitionFrom int, partitionTo int, reorderWindow int, groupByName bool, outOfOrderGroupedByName *map[string]int, duplicatesGroupedByName *map[string]int, groupByTag string, outOfOrderGroupedByTag *map[string]int, duplicatesGroupedByTag *map[string]int) *inputOOOFinder {
+func newInputOOOFinder(prefix string, substr string, partitionFrom int, partitionTo int, reorderWindow uint32, groupByName bool, outOfOrderGroupedByName *map[string]int, duplicatesGroupedByName *map[string]int, groupByTag string, outOfOrderGroupedByTag *map[string]int, duplicatesGroupedByTag *map[string]int) *inputOOOFinder {
 	cassandraIndex := cassandra.New(cassandra.CliConfig)
 	err := cassandraIndex.InitBare()
 	if err != nil {
@@ -59,7 +58,7 @@ func newInputOOOFinder(prefix string, substr string, partitionFrom int, partitio
 		tracker[metricDefinition.Id] = Track{
 			Name:          metricDefinition.Name,
 			Tags:          metricDefinition.Tags,
-			reorderBuffer: mdata.NewReorderBuffer(uint32(reorderWindow), uint32(metricDefinition.Interval), false),
+			reorderBuffer: mdata.NewReorderBuffer(reorderWindow, uint32(metricDefinition.Interval), false),
 		}
 	}
 
@@ -67,8 +66,7 @@ func newInputOOOFinder(prefix string, substr string, partitionFrom int, partitio
 		prefix: prefix,
 		substr: substr,
 
-		tracker:       tracker,
-		reorderWindow: reorderWindow,
+		tracker: tracker,
 
 		groupByName:             groupByName,
 		outOfOrderGroupedByName: outOfOrderGroupedByName,

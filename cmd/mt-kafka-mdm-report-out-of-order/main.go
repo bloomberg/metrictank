@@ -38,7 +38,7 @@ func main() {
 		flags.Substr,
 		flags.PartitionFrom,
 		flags.PartitionTo,
-		flags.ReorderWindow,
+		uint32(flags.ReorderWindow),
 		flags.GroupByName,
 		&outOfOrderGroupedByName,
 		&duplicatesGroupedByName,
