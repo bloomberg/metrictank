@@ -119,7 +119,7 @@ func (flags *Flags) Usage() {
 	fmt.Fprintln(os.Stderr, "  percentTotal: out of all of the metric points, what percentage of them had this name/tag (depending on grouping)?")
 	fmt.Fprintln(os.Stderr, "                the example above shows that ~0.003% of all metric points had tag fruit=apple and were out of order")
 	fmt.Fprintln(os.Stderr)
-	fmt.Fprintf(os.Stderr, "flags:")
+	fmt.Fprintln(os.Stderr, "flags:")
 	flags.flagSet.PrintDefaults()
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "EXAMPLES:")
