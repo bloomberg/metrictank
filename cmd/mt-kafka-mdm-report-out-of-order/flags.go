@@ -123,7 +123,7 @@ func (flags *Flags) Usage() {
 	fmt.Fprintln(os.Stderr, "                the example above shows that ~4.301% of all metric points with name \"fruit.weight\" were out of order")
 	fmt.Fprintln(os.Stderr, "  percentClass: out of all of the metric points that were out-of-order/duplicates (depending on classification), what percentage of them had this name/tag (depending on grouping)?")
 	fmt.Fprintln(os.Stderr, "                the example above shows that ~2.063% of all metric points that were out of order had tag fruit=apple")
-	fmt.Fprintln(os.Stderr, "  percentTotal: out of all of the metric points, what percentage of them had this name/tag (depending on grouping)?")
+	fmt.Fprintln(os.Stderr, "  percentTotal: out of all of the metric points, what percentage of them had this name/tag (depending on grouping) and were out-of-order/duplicates (depending on classification)?")
 	fmt.Fprintln(os.Stderr, "                the example above shows that ~0.177% of all metric points had tag \"fruit\"=\"orange\" and were duplicates")
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "flags:")
