@@ -43,19 +43,38 @@ func aggregateAndLog(tracker Tracker, groupByName bool, groupByTag string) {
 		duplicateCount += track.DuplicateCount
 	}
 
-	log.Infof("total metric points count=%d", count)
-	log.Infof("total out-of-order metric points count=%d", outOfOrderCount)
-	log.Infof("total duplicate metric points count=%d", duplicateCount)
-
+	var aggregatedByName map[string]Aggregate
 	if groupByName {
-		aggregatedByName := aggregateByName(tracker)
+		aggregatedByName = aggregateByName(tracker)
+	}
+
+	var aggregatedByTag map[string]Aggregate
+	if groupByTag != "" {
+		aggregatedByTag = aggregateByTag(tracker, groupByTag)
+	}
+
+	log.Infof("total metric points count=%d", count)
+
+	log.Infof("total out-of-order metric points count=%d", outOfOrderCount)
+	if groupByName && outOfOrderCount > 0 {
 		log.Info("out-of-order metric points grouped by name:")
 		for name, aggregate := range aggregatedByName {
 			if aggregate.OutOfOrderCount > 0 {
 				log.Infof("out-of-order metric points for name=%q count=%d percentGroup=%f percentClass=%f percentTotal=%f", name, aggregate.OutOfOrderCount, float64(aggregate.OutOfOrderCount)/float64(aggregate.Count)*100, float64(aggregate.OutOfOrderCount)/float64(outOfOrderCount)*100, float64(aggregate.OutOfOrderCount)/float64(count)*100)
 			}
 		}
+	}
+	if groupByTag != "" && outOfOrderCount > 0 {
+		log.Infof("out-of-order metric points grouped by tag=%q:", groupByTag)
+		for tag, aggregate := range aggregatedByTag {
+			if aggregate.OutOfOrderCount > 0 {
+				log.Infof("out-of-order metric points for tag=%q value=%q count=%d percentGroup=%f percentClass=%f percentTotal=%f", groupByTag, tag, aggregate.OutOfOrderCount, float64(aggregate.OutOfOrderCount)/float64(aggregate.Count)*100, float64(aggregate.OutOfOrderCount)/float64(outOfOrderCount)*100, float64(aggregate.OutOfOrderCount)/float64(count)*100)
+			}
+		}
+	}
 
+	log.Infof("total duplicate metric points count=%d", duplicateCount)
+	if groupByName && duplicateCount > 0 {
 		log.Info("duplicate metric points grouped by name:")
 		for name, aggregate := range aggregatedByName {
 			if aggregate.DuplicateCount > 0 {
@@ -63,16 +82,7 @@ func aggregateAndLog(tracker Tracker, groupByName bool, groupByTag string) {
 			}
 		}
 	}
-
-	if groupByTag != "" {
-		aggregatedByTag := aggregateByTag(tracker, groupByTag)
-		log.Infof("out-of-order metric points grouped by tag=%q:", groupByTag)
-		for tag, aggregate := range aggregatedByTag {
-			if aggregate.OutOfOrderCount > 0 {
-				log.Infof("out-of-order metric points for tag=%q value=%q count=%d percentGroup=%f percentClass=%f percentTotal=%f", groupByTag, tag, aggregate.OutOfOrderCount, float64(aggregate.OutOfOrderCount)/float64(aggregate.Count)*100, float64(aggregate.OutOfOrderCount)/float64(outOfOrderCount)*100, float64(aggregate.OutOfOrderCount)/float64(count)*100)
-			}
-		}
-
+	if groupByTag != "" && duplicateCount > 0 {
 		log.Infof("duplicate metric points grouped by tag=%q:", groupByTag)
 		for tag, aggregate := range aggregatedByTag {
 			if aggregate.DuplicateCount > 0 {
@@ -80,7 +90,6 @@ func aggregateAndLog(tracker Tracker, groupByName bool, groupByTag string) {
 			}
 		}
 	}
-	return
 }
 
 func main() {
