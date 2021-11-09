@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -21,6 +22,68 @@ func configureLogging() {
 	log.SetLevel(log.InfoLevel)
 }
 
+func filter(tracker Tracker, prefix string, substr string) {
+	for key, track := range tracker {
+		if prefix != "" && !strings.HasPrefix(track.Name, prefix) {
+			delete(tracker, key)
+		}
+		if substr != "" && !strings.Contains(track.Name, substr) {
+			delete(tracker, key)
+		}
+	}
+}
+
+func aggregateAndLog(tracker Tracker, groupByName bool, groupByTag string) {
+	count := 0
+	outOfOrderCount := 0
+	duplicateCount := 0
+	for _, track := range tracker {
+
+		count += track.Count
+		outOfOrderCount += track.OutOfOrderCount
+		duplicateCount += track.DuplicateCount
+	}
+
+	log.Infof("total metric points count=%d", count)
+	log.Infof("total out-of-order metric points count=%d", outOfOrderCount)
+	log.Infof("total duplicate metric points count=%d", duplicateCount)
+
+	if groupByName {
+		aggregatedByName := aggregateByName(tracker)
+		log.Info("out-of-order metric points grouped by name:")
+		for name, aggregate := range aggregatedByName {
+			if aggregate.OutOfOrderCount > 0 {
+				log.Infof("out-of-order metric points for name=%q count=%d percentName=%f percentTotalOutOfOrder=%f", name, aggregate.OutOfOrderCount, float64(aggregate.OutOfOrderCount)/float64(aggregate.Count)*100, float64(aggregate.OutOfOrderCount)/float64(outOfOrderCount)*100)
+			}
+		}
+
+		log.Info("duplicate metric points grouped by name:")
+		for name, aggregate := range aggregatedByName {
+			if aggregate.DuplicateCount > 0 {
+				log.Infof("duplicate metric points for name=%q count=%d percentName=%f percentTotalDuplicate=%f", name, aggregate.DuplicateCount, float64(aggregate.DuplicateCount)/float64(aggregate.Count)*100, float64(aggregate.DuplicateCount)/float64(duplicateCount)*100)
+			}
+		}
+	}
+
+	if groupByTag != "" {
+		aggregatedByTag := aggregateByTag(tracker, groupByTag)
+		log.Infof("out-of-order metric points grouped by tag=%q:", groupByTag)
+		for tag, aggregate := range aggregatedByTag {
+			if aggregate.OutOfOrderCount > 0 {
+				log.Infof("out-of-order metric points for tag=%q value=%q count=%d percentTag=%f percentTotalOutOfOrder=%f", groupByTag, tag, aggregate.OutOfOrderCount, float64(aggregate.OutOfOrderCount)/float64(aggregate.Count)*100, float64(aggregate.OutOfOrderCount)/float64(outOfOrderCount)*100)
+			}
+		}
+
+		log.Infof("duplicate metric points grouped by tag=%q:", groupByTag)
+		for tag, aggregate := range aggregatedByTag {
+			if aggregate.DuplicateCount > 0 {
+				log.Infof("duplicate metric points for tag=%q value=%q count=%d percentTag=%f percentTotalDuplicate=%f", groupByTag, tag, aggregate.DuplicateCount, float64(aggregate.DuplicateCount)/float64(aggregate.Count)*100, float64(aggregate.DuplicateCount)/float64(duplicateCount)*100)
+			}
+		}
+	}
+	return
+}
+
 func main() {
 	configureLogging()
 
@@ -29,22 +92,10 @@ func main() {
 	inKafkaMdm.ConfigProcess("mt-kafka-mdm-report-out-of-order" + strconv.Itoa(rand.Int()))
 	kafkaMdm := inKafkaMdm.New()
 
-	outOfOrderGroupedByName := map[string]int{}
-	duplicatesGroupedByName := map[string]int{}
-	outOfOrderGroupedByTag := map[string]int{}
-	duplicatesGroupedByTag := map[string]int{}
 	inputOOOFinder := newInputOOOFinder(
-		flags.Prefix,
-		flags.Substr,
 		flags.PartitionFrom,
 		flags.PartitionTo,
 		uint32(flags.ReorderWindow),
-		flags.GroupByName,
-		&outOfOrderGroupedByName,
-		&duplicatesGroupedByName,
-		flags.GroupByTag,
-		&outOfOrderGroupedByTag,
-		&duplicatesGroupedByTag,
 	)
 
 	sigChan := make(chan os.Signal, 1)
@@ -62,26 +113,7 @@ func main() {
 	}
 	kafkaMdm.Stop()
 
-	if flags.GroupByName {
-		log.Info("out-of-order metrics grouped by name:")
-		for key, value := range outOfOrderGroupedByName {
-			log.Infof("out-of-order name=%q count=%d", key, value)
-		}
-
-		log.Info("duplicate metrics grouped by name:")
-		for key, value := range duplicatesGroupedByName {
-			log.Infof("duplicate name=%q count=%d", key, value)
-		}
-	}
-	if flags.GroupByTag != "" {
-		log.Info("out-of-order metrics grouped by tag:")
-		for key, value := range outOfOrderGroupedByTag {
-			log.Infof("out-of-order tag=%q count=%d", key, value)
-		}
-
-		log.Info("duplicate metrics grouped by tag:")
-		for key, value := range duplicatesGroupedByTag {
-			log.Infof("duplicate tag=%q count=%d", key, value)
-		}
-	}
+	tracker := inputOOOFinder.Tracker()
+	filter(tracker, flags.Prefix, flags.Substr)
+	aggregateAndLog(tracker, flags.GroupByName, flags.GroupByTag)
 }

@@ -2,7 +2,6 @@ package main
 
 import (
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -19,29 +18,27 @@ type Track struct {
 	Tags []string
 
 	reorderBuffer *mdata.ReorderBuffer
+
+	Count           int
+	OutOfOrderCount int
+	DuplicateCount  int
 }
 
 type Tracker map[schema.MKey]Track
 
 // find out-of-order and duplicate metrics
 type inputOOOFinder struct {
-	prefix string
-	substr string
-
 	reorderWindow uint32
 	tracker       Tracker
-
-	groupByName             bool
-	outOfOrderGroupedByName *map[string]int
-	duplicatesGroupedByName *map[string]int
-	groupByTag              string
-	outOfOrderGroupedByTag  *map[string]int
-	duplicatesGroupedByTag  *map[string]int
 
 	lock sync.Mutex
 }
 
-func newInputOOOFinder(prefix string, substr string, partitionFrom int, partitionTo int, reorderWindow uint32, groupByName bool, outOfOrderGroupedByName *map[string]int, duplicatesGroupedByName *map[string]int, groupByTag string, outOfOrderGroupedByTag *map[string]int, duplicatesGroupedByTag *map[string]int) *inputOOOFinder {
+func (ip inputOOOFinder) Tracker() Tracker {
+	return ip.tracker
+}
+
+func newInputOOOFinder(partitionFrom int, partitionTo int, reorderWindow uint32) *inputOOOFinder {
 	cassandraIndex := cassandra.New(cassandra.CliConfig)
 	err := cassandraIndex.InitBare()
 	if err != nil {
@@ -57,65 +54,37 @@ func newInputOOOFinder(prefix string, substr string, partitionFrom int, partitio
 	tracker := Tracker{}
 	for _, metricDefinition := range metricDefinitions {
 		tracker[metricDefinition.Id] = Track{
-			Name:          metricDefinition.Name,
-			Tags:          metricDefinition.Tags,
-			reorderBuffer: mdata.NewReorderBuffer(reorderWindow, uint32(metricDefinition.Interval), false),
+			Name:            metricDefinition.Name,
+			Tags:            metricDefinition.Tags,
+			reorderBuffer:   mdata.NewReorderBuffer(reorderWindow, uint32(metricDefinition.Interval), false),
+			Count:           0,
+			OutOfOrderCount: 0,
+			DuplicateCount:  0,
 		}
 	}
 
 	return &inputOOOFinder{
-		prefix: prefix,
-		substr: substr,
-
 		reorderWindow: reorderWindow,
 		tracker:       tracker,
-
-		groupByName:             groupByName,
-		outOfOrderGroupedByName: outOfOrderGroupedByName,
-		duplicatesGroupedByName: duplicatesGroupedByName,
-		groupByTag:              groupByTag,
-		outOfOrderGroupedByTag:  outOfOrderGroupedByTag,
-		duplicatesGroupedByTag:  duplicatesGroupedByTag,
 
 		lock: sync.Mutex{},
 	}
 }
 
-func (ip *inputOOOFinder) incrementGroupings(groupedByName *map[string]int, groupedByTag *map[string]int, track Track) {
-	if ip.groupByName == true {
-		(*groupedByName)[track.Name]++
-	}
-
-	if ip.groupByTag != "" {
-		for _, tag := range track.Tags {
-			kv := strings.Split(tag, "=")
-			if len(kv) != 2 {
-				log.Errorf("unexpected tag encoding tag=%q", tag)
-				continue
-			}
-			if kv[0] == ip.groupByTag {
-				(*groupedByTag)[kv[1]]++
-			}
-		}
-	}
-}
-
-func (ip *inputOOOFinder) processTrack(metricKey schema.MKey, metricTime int64, track Track, partition int32) {
-	if ip.prefix != "" && !strings.HasPrefix(track.Name, ip.prefix) {
-		return
-	}
-	if ip.substr != "" && !strings.Contains(track.Name, ip.substr) {
-		return
-	}
+func (ip *inputOOOFinder) incrementCounts(metricKey schema.MKey, metricTime int64, track Track, partition int32) {
+	track.Count++
 
 	_, err := track.reorderBuffer.Add(uint32(metricTime), 0) // ignore value
 	if err == errors.ErrMetricTooOld {
-		ip.incrementGroupings(ip.outOfOrderGroupedByName, ip.outOfOrderGroupedByTag, track)
+		track.OutOfOrderCount++
 	} else if err == errors.ErrMetricNewValueForTimestamp {
-		ip.incrementGroupings(ip.duplicatesGroupedByName, ip.duplicatesGroupedByTag, track)
+		track.DuplicateCount++
 	} else if err != nil {
-		log.Errorf("failed to add metric with name=%q and timestamp=%d from partition=%d to reorder buffer: %s", track.Name, metricTime, partition, err)
+		log.Errorf("failed to add metric with Name=%q and timestamp=%d from partition=%d to reorder buffer: %s", track.Name, metricTime, partition, err)
+		return
 	}
+
+	ip.tracker[metricKey] = track
 }
 
 func (ip *inputOOOFinder) ProcessMetricData(metric *schema.MetricData, partition int32) {
@@ -131,14 +100,17 @@ func (ip *inputOOOFinder) ProcessMetricData(metric *schema.MetricData, partition
 	track, exists := ip.tracker[metricKey]
 	if !exists {
 		ip.tracker[metricKey] = Track{
-			Name:          metric.Name,
-			Tags:          metric.Tags,
-			reorderBuffer: mdata.NewReorderBuffer(ip.reorderWindow, uint32(metric.Interval), false),
+			Name:            metric.Name,
+			Tags:            metric.Tags,
+			reorderBuffer:   mdata.NewReorderBuffer(ip.reorderWindow, uint32(metric.Interval), false),
+			Count:           0,
+			OutOfOrderCount: 0,
+			DuplicateCount:  0,
 		}
 		return
 	}
 
-	ip.processTrack(metricKey, metric.Time, track, partition)
+	ip.incrementCounts(metricKey, metric.Time, track, partition)
 }
 
 func (ip *inputOOOFinder) ProcessMetricPoint(mp schema.MetricPoint, format msg.Format, partition int32) {
@@ -151,7 +123,7 @@ func (ip *inputOOOFinder) ProcessMetricPoint(mp schema.MetricPoint, format msg.F
 		return
 	}
 
-	ip.processTrack(mp.MKey, int64(mp.Time), track, partition)
+	ip.incrementCounts(mp.MKey, int64(mp.Time), track, partition)
 }
 
 func (ip *inputOOOFinder) ProcessIndexControlMsg(msg schema.ControlMsg, partition int32) {
