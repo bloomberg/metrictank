@@ -111,8 +111,8 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 
 	results := []models.Series{}
 	for _, serie := range series {
-		factor, offset, forecast := linearRegressionAnalysis(serie, startSourceAt, endSourceAt)
-		if !forecast {
+		factor, offset, isValid := linearRegressionAnalysis(serie, startSourceAt, endSourceAt)
+		if !isValid {
 			continue
 		}
 
