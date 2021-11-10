@@ -2,6 +2,7 @@ package expr
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"time"
 
@@ -60,16 +61,15 @@ func linearRegressionAnalysis(series models.Series, startSourceAt uint32, endSou
 	var sumIV float64
 
 	for i := sort.Search(len(series.Datapoints), func(i int) bool { return series.Datapoints[i].Ts >= startSourceAt }); i < len(series.Datapoints) && series.Datapoints[i].Ts <= endSourceAt; i++ {
-		// The index must be rebuilt from the timestamp because
-		// the points of the series do not include "missing" points.
-		index := float64((series.Datapoints[i].Ts - startSourceAt) / series.Interval)
-		value := series.Datapoints[i].Val
+		if math.IsNaN(series.Datapoints[i].Val) {
+			continue
+		}
 
 		n++
-		sumI += index
-		sumII += index * index
-		sumV += value
-		sumIV += index * value
+		sumI += float64(i)
+		sumII += float64(i) * float64(i)
+		sumV += series.Datapoints[i].Val
+		sumIV += float64(i) * series.Datapoints[i].Val
 	}
 
 	denominator := n*sumII - sumI*sumI
