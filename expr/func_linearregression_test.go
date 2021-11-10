@@ -1,6 +1,7 @@
 package expr
 
 import (
+	"math"
 	"testing"
 
 	"github.com/grafana/metrictank/api/models"
@@ -41,12 +42,12 @@ func TestLinearRegression(t *testing.T) {
 		QueryTo:   540,
 		Datapoints: []schema.Point{
 			{
-				Val: -100,
-				Ts:  120,
-			},
-			{
 				Val: 3,
 				Ts:  180,
+			},
+			{
+				Val: math.NaN(),
+				Ts:  240,
 			},
 			{
 				Val: 5,
@@ -57,12 +58,12 @@ func TestLinearRegression(t *testing.T) {
 				Ts:  360,
 			},
 			{
-				Val: 8,
-				Ts:  480,
+				Val: math.NaN(),
+				Ts:  420,
 			},
 			{
-				Val: 300,
-				Ts:  540,
+				Val: 8,
+				Ts:  480,
 			},
 		},
 	}}
