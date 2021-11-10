@@ -107,7 +107,6 @@ func (ip *inputOOOFinder) ProcessMetricData(metric *schema.MetricData, partition
 			OutOfOrderCount: 0,
 			DuplicateCount:  0,
 		}
-		return
 	}
 
 	ip.incrementCounts(metricKey, metric.Time, track, partition)
