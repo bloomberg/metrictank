@@ -116,7 +116,7 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 			continue
 		}
 
-		datapoints := []schema.Point{}
+		datapoints := pointSlicePool.GetMin(int((s.endTargetAt - s.startTargetAt) / serie.Interval))
 		{
 			var i uint32
 			for i = 0; i <= (s.endTargetAt-s.startTargetAt)/serie.Interval; i++ {
