@@ -3,7 +3,6 @@ package expr
 import (
 	"fmt"
 	"math"
-	"sort"
 	"time"
 
 	"github.com/grafana/metrictank/api/models"
@@ -53,35 +52,6 @@ func (s *FuncLinearRegression) Context(context Context) Context {
 	return context
 }
 
-func linearRegressionAnalysis(series models.Series, startSourceAt uint32, endSourceAt uint32) (float64, float64, bool) {
-	var n float64
-	var sumI float64
-	var sumII float64
-	var sumV float64
-	var sumIV float64
-
-	for i := sort.Search(len(series.Datapoints), func(i int) bool { return series.Datapoints[i].Ts >= startSourceAt }); i < len(series.Datapoints) && series.Datapoints[i].Ts <= endSourceAt; i++ {
-		if math.IsNaN(series.Datapoints[i].Val) {
-			continue
-		}
-
-		n++
-		sumI += float64(i)
-		sumII += float64(i) * float64(i)
-		sumV += series.Datapoints[i].Val
-		sumIV += float64(i) * series.Datapoints[i].Val
-	}
-
-	denominator := n*sumII - sumI*sumI
-	if denominator == 0 {
-		return 0, 0, false
-	}
-
-	factor := (n*sumIV - sumI*sumV) / denominator / float64(series.Interval)
-	offset := (sumII*sumV-sumIV*sumI)/denominator - factor*float64(startSourceAt)
-	return factor, offset, true
-}
-
 func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 	loc, err := time.LoadLocation("") // todo, no idea what timezone to use here, utc is a reasonable default
 	if err != nil {
@@ -109,6 +79,7 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 		return nil, err
 	}
 
+	fmt.Println("DOM DEBUG startSourceAt:", startSourceAt, "endSourceAt:", endSourceAt, "startTargetAt:", s.startTargetAt, "endTargetAt:", s.endTargetAt)
 	results := []models.Series{}
 	for _, serie := range series {
 		factor, offset, isValid := linearRegressionAnalysis(serie, startSourceAt, endSourceAt)
@@ -117,26 +88,54 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 		}
 
 		datapoints := pointSlicePool.GetMin(int((s.endTargetAt - s.startTargetAt) / serie.Interval))
-		{
-			var i uint32
-			for i = 0; i <= (s.endTargetAt-s.startTargetAt)/serie.Interval; i++ {
-				datapoints = append(datapoints, schema.Point{
-					Val: offset + (float64(s.startTargetAt)+float64(i)*float64(serie.Interval))*factor,
-					Ts:  s.startTargetAt + i*serie.Interval,
-				})
-			}
+		for i, _ := range serie.Datapoints {
+			datapoints = append(datapoints, schema.Point{
+				Val: offset + (float64(startSourceAt)+float64(i)*float64(serie.Interval))*factor,
+				Ts:  s.startTargetAt + uint32(i)*serie.Interval,
+			})
 		}
 
-		name := fmt.Sprintf("linearRegression(%s, %d, %d)", serie.Target, startSourceAt, endSourceAt)
+		name := fmt.Sprintf("linearRegression(%s, %d, %d)", serie.Target, s.startTargetAt, s.endTargetAt)
 
 		newSeries := serie.Copy([]schema.Point{})
 		newSeries.Target = name
 		newSeries.Datapoints = datapoints
-		newSeries.Tags["linearRegressions"] = fmt.Sprintf("%d, %d", startSourceAt, endSourceAt)
+		newSeries.Tags["linearRegressions"] = fmt.Sprintf("%d, %d", s.startTargetAt, s.endTargetAt)
 		newSeries.QueryPatt = name
 		newSeries.QueryFrom = s.startTargetAt
 		newSeries.QueryTo = s.endTargetAt
+
 		results = append(results, newSeries)
 	}
 	return results, nil
+}
+
+func linearRegressionAnalysis(series models.Series, startSourceAt uint32, endSourceAt uint32) (float64, float64, bool) {
+	var n float64
+	var sumI float64
+	var sumII float64
+	var sumV float64
+	var sumIV float64
+
+	for i, point := range series.Datapoints {
+		if math.IsNaN(point.Val) {
+			continue
+		}
+
+		n++
+		sumI += float64(i)
+		sumII += float64(i) * float64(i)
+		sumV += point.Val
+		sumIV += float64(i) * point.Val
+	}
+
+	denominator := n*sumII - sumI*sumI
+	if denominator == 0 {
+		return 0, 0, false
+	}
+
+	factor := (n*sumIV - sumI*sumV) / denominator / float64(series.Interval)
+	offset := (sumII*sumV-sumIV*sumI)/denominator - factor*float64(startSourceAt)
+	fmt.Println("DOM DEBUG sumI:", sumI, "sumII:", sumII, "sumV", sumV, "sumIV", sumIV, "factor:", factor, "offset:", offset)
+	return factor, offset, true
 }
