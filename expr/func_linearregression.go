@@ -15,6 +15,8 @@ type FuncLinearRegression struct {
 
 	startSourceAt string
 	endSourceAt   string
+	parsedStartSourceAt uint32
+	parsedEndSourceAt uint32
 
 	startTargetAt uint32
 	endTargetAt   uint32
@@ -49,40 +51,48 @@ func (s *FuncLinearRegression) Context(context Context) Context {
 	s.startTargetAt = context.from
 	s.endTargetAt = context.to
 
+	if err := s.parseSourceAt(); err != nil {
+		fmt.Println("DOM DEBUG PARSE ERR:", err)
+	}// todo handle error
+	context.from = s.parsedStartSourceAt
+	context.to = s.parsedEndSourceAt
+
 	return context
 }
 
-func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
+func (s *FuncLinearRegression) parseSourceAt() error {
 	loc, err := time.LoadLocation("") // todo, no idea what timezone to use here, utc is a reasonable default
 	if err != nil {
-		return nil, fmt.Errorf("failed to load location: %w", err)
+		return fmt.Errorf("failed to load location: %w", err)
 	}
 
 	now := time.Now()
 
 	defaultStartSourceAt := uint32(now.Add(-24 * time.Hour).Unix())
-	startSourceAt, err := dur.ParseDateTime(s.startSourceAt, loc, now, defaultStartSourceAt)
+	s.parsedStartSourceAt, err = dur.ParseDateTime(s.startSourceAt, loc, now, defaultStartSourceAt)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse 'startSourceAt' argument %q: %w", s.startSourceAt, err)
+		return fmt.Errorf("failed to parse 'startSourceAt' argument %q: %w", s.startSourceAt, err)
 	}
 
 	defaultEndSourceAt := uint32(now.Unix())
-	endSourceAt, err := dur.ParseDateTime(s.endSourceAt, loc, now, defaultEndSourceAt)
+	s.parsedEndSourceAt, err = dur.ParseDateTime(s.endSourceAt, loc, now, defaultEndSourceAt)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse 'endSourceAt' argument %q: %w", s.endSourceAt, err)
+		return fmt.Errorf("failed to parse 'endSourceAt' argument %q: %w", s.endSourceAt, err)
 	}
 
-	// todo update context.from and .to if needed?
+	return nil
+}
 
+func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 	series, err := s.in.Exec(dataMap)
 	if err != nil {
 		return nil, err
 	}
 
-	fmt.Println("DOM DEBUG startSourceAt:", startSourceAt, "endSourceAt:", endSourceAt, "startTargetAt:", s.startTargetAt, "endTargetAt:", s.endTargetAt)
+	fmt.Println("DOM DEBUG s.parsedStartSourceAt:", s.parsedStartSourceAt, "s.parsedEndSourceAt:", s.parsedEndSourceAt, "startTargetAt:", s.startTargetAt, "endTargetAt:", s.endTargetAt)
 	results := []models.Series{}
 	for _, serie := range series {
-		factor, offset, isValid := linearRegressionAnalysis(serie, startSourceAt, endSourceAt)
+		factor, offset, isValid := linearRegressionAnalysis(serie, s.parsedStartSourceAt, s.parsedEndSourceAt)
 		if !isValid {
 			continue
 		}
@@ -90,7 +100,7 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 		datapoints := pointSlicePool.GetMin(int((s.endTargetAt - s.startTargetAt) / serie.Interval))
 		for i, _ := range serie.Datapoints {
 			datapoints = append(datapoints, schema.Point{
-				Val: offset + (float64(startSourceAt)+float64(i)*float64(serie.Interval))*factor,
+				Val: offset + (float64(s.startTargetAt)+float64(i)*float64(serie.Interval))*factor,
 				Ts:  s.startTargetAt + uint32(i)*serie.Interval,
 			})
 		}
