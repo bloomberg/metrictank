@@ -1,6 +1,7 @@
 package expr
 
 import (
+"fmt"
 	"math"
 	"strings"
 	"unsafe"
@@ -88,6 +89,7 @@ func aggregate(dataMap DataMap, series []models.Series, queryPatts []string, agg
 	var meta models.SeriesMeta
 
 	for _, serie := range series {
+		fmt.Println("DOM DEBUG aggregate interval:", serie.Interval)
 		meta = meta.Merge(serie.Meta)
 		for k, v := range serie.Tags {
 			if commonTags[k] != v {
@@ -112,6 +114,7 @@ func aggregate(dataMap DataMap, series []models.Series, queryPatts []string, agg
 	output.QueryCons = queryCons
 	output.Consolidator = cons
 	output.Meta = meta
+	fmt.Println("DOM DEBUG aggregate output:", output)
 
 	dataMap.Add(Req{}, output)
 
