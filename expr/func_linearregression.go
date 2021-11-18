@@ -54,8 +54,8 @@ func (s *FuncLinearRegression) Context(context Context) Context {
 	if err := s.parseSourceAt(); err != nil {
 		fmt.Println("DOM DEBUG PARSE ERR:", err)
 	}// todo handle error
-	context.from = s.parsedStartSourceAt
-	context.to = s.parsedEndSourceAt
+	//context.from = s.parsedStartSourceAt
+	//context.to = s.parsedEndSourceAt
 
 	return context
 }
@@ -105,34 +105,39 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 	results := []models.Series{}
 	for _, serie := range series {
 		fmt.Println("DOM DEBUG series:", serie)
-		factor, offset, isValid := linearRegressionAnalysis(serie, s.parsedStartSourceAt, s.parsedEndSourceAt)
-		if !isValid {
-			continue
-		}
-
 		deducedInterval := deduceInterval(serie)
 		fmt.Println("DOM DEBUG acutal interval:", serie.Interval, "deduced:", deducedInterval)
 		startTargetAt := normalize(s.startTargetAt, deducedInterval)
 		fmt.Println("DOM DEBUG base start target at:", s.startTargetAt, "normalized", startTargetAt)
 
+		factor, offset, isValid := linearRegressionAnalysis(serie, startTargetAt)
+		if !isValid {
+			continue
+		}
+		fmt.Println("DOM DEBUG factor:", factor, "offset:", offset)
+
 		datapoints := pointSlicePool.GetMin(int((s.endTargetAt - startTargetAt) / deducedInterval))
 		for i, _ := range serie.Datapoints {
-			datapoints = append(datapoints, schema.Point{
+			fmt.Println("startTargetAt:", startTargetAt, "i:", i)
+			datapoint := schema.Point{
 				Val: offset + (float64(startTargetAt)+float64(i)*float64(deducedInterval))*factor,
 				Ts:  startTargetAt + uint32(i)*deducedInterval,
-			})
+			}
+			fmt.Println("DOM DEBUG:", offset, "+ (", startTargetAt, "+", i, "*", deducedInterval, ") *", factor, "=", offset + (float64(startTargetAt)+float64(i)*float64(deducedInterval))*factor, "=", datapoint.Val, "@", datapoint.Ts)
+			datapoints = append(datapoints, datapoint)
 		}
 
-		name := fmt.Sprintf("linearRegression(%s, %d, %d)", serie.Target, startTargetAt, s.endTargetAt)
+		name := fmt.Sprintf("linearRegression(%s, %d, %d)", serie.Target, s.startTargetAt, s.endTargetAt)
 
 		newSeries := serie.Copy([]schema.Point{})
 		newSeries.Target = name
 		newSeries.Datapoints = datapoints
-		newSeries.Tags["linearRegressions"] = fmt.Sprintf("%d, %d", startTargetAt, s.endTargetAt)
+		newSeries.Tags["linearRegressions"] = fmt.Sprintf("%d, %d", s.startTargetAt, s.endTargetAt)
 		newSeries.QueryPatt = name
-		newSeries.QueryFrom = startTargetAt
+		newSeries.QueryFrom = s.startTargetAt
 		newSeries.QueryTo = s.endTargetAt
 
+		fmt.Println("newSeries:", newSeries)
 		results = append(results, newSeries)
 	}
 	return results, nil
@@ -146,13 +151,14 @@ func deduceInterval(series models.Series) uint32 {
 	return series.Datapoints[1].Ts - series.Datapoints[0].Ts
 }
 
-func linearRegressionAnalysis(series models.Series, startSourceAt uint32, endSourceAt uint32) (float64, float64, bool) {
+func linearRegressionAnalysis(series models.Series, startSourceAt uint32) (float64, float64, bool) {
 	var n float64
 	var sumI float64
 	var sumII float64
 	var sumV float64
 	var sumIV float64
 
+	fmt.Println("DOM DEBUG series.Interval:", series.Interval, "startSourceAt:", startSourceAt)
 	for i, point := range series.Datapoints {
 		if math.IsNaN(point.Val) {
 			continue
@@ -164,14 +170,15 @@ func linearRegressionAnalysis(series models.Series, startSourceAt uint32, endSou
 		sumV += point.Val
 		sumIV += float64(i) * point.Val
 	}
+	fmt.Println("DOM DEBUG n:", n, "sumI:", sumI, "sumV:", sumV, "sumII:", sumII, "sumIV:", sumIV)
 
 	denominator := n*sumII - sumI*sumI
+	fmt.Println("DOM DEBUG denominator:", denominator)
 	if denominator == 0 {
 		return 0, 0, false
 	}
 
 	factor := (n*sumIV - sumI*sumV) / denominator / float64(series.Interval)
 	offset := (sumII*sumV-sumIV*sumI)/denominator - factor*float64(startSourceAt)
-	fmt.Println("DOM DEBUG sumI:", sumI, "sumII:", sumII, "sumV", sumV, "sumIV", sumIV, "factor:", factor, "offset:", offset)
 	return factor, offset, true
 }
