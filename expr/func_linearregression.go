@@ -54,8 +54,8 @@ func (s *FuncLinearRegression) Context(context Context) Context {
 	if err := s.parseSourceAt(); err != nil {
 		fmt.Println("DOM DEBUG PARSE ERR:", err)
 	}// todo handle error
-	//context.from = s.parsedStartSourceAt
-	//context.to = s.parsedEndSourceAt
+	context.from = s.parsedStartSourceAt
+	context.to = s.parsedEndSourceAt
 
 	return context
 }
@@ -96,6 +96,8 @@ func normalize(timestamp, interval uint32) uint32 {
 }
 
 func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
+	fmt.Println("DOM DEBUG dataMap:", dataMap)
+
 	series, err := s.in.Exec(dataMap)
 	if err != nil {
 		return nil, err
@@ -110,14 +112,15 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 		startTargetAt := normalize(s.startTargetAt, deducedInterval)
 		fmt.Println("DOM DEBUG base start target at:", s.startTargetAt, "normalized", startTargetAt)
 
-		factor, offset, isValid := linearRegressionAnalysis(serie, startTargetAt)
+		factor, offset, isValid := linearRegressionAnalysis(serie, serie.QueryFrom)
 		if !isValid {
 			continue
 		}
 		fmt.Println("DOM DEBUG factor:", factor, "offset:", offset)
 
 		datapoints := pointSlicePool.GetMin(int((s.endTargetAt - startTargetAt) / deducedInterval))
-		for i, _ := range serie.Datapoints {
+                //for i := 0; i < int((s.endTargetAt - startTargetAt) / deducedInterval); i++ {
+		for i := 0; i < len(serie.Datapoints); i++ {
 			fmt.Println("startTargetAt:", startTargetAt, "i:", i)
 			datapoint := schema.Point{
 				Val: offset + (float64(startTargetAt)+float64(i)*float64(deducedInterval))*factor,
@@ -127,12 +130,12 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 			datapoints = append(datapoints, datapoint)
 		}
 
-		name := fmt.Sprintf("linearRegression(%s, %d, %d)", serie.Target, s.startTargetAt, s.endTargetAt)
+		name := fmt.Sprintf("linearRegression(%s, %d, %d)", serie.Target, s.parsedStartSourceAt, s.parsedEndSourceAt)
 
 		newSeries := serie.Copy([]schema.Point{})
 		newSeries.Target = name
 		newSeries.Datapoints = datapoints
-		newSeries.Tags["linearRegressions"] = fmt.Sprintf("%d, %d", s.startTargetAt, s.endTargetAt)
+		newSeries.Tags["linearRegressions"] = fmt.Sprintf("%d, %d", s.parsedStartSourceAt, s.parsedEndSourceAt)
 		newSeries.QueryPatt = name
 		newSeries.QueryFrom = s.startTargetAt
 		newSeries.QueryTo = s.endTargetAt
@@ -152,6 +155,10 @@ func deduceInterval(series models.Series) uint32 {
 }
 
 func linearRegressionAnalysis(series models.Series, startSourceAt uint32) (float64, float64, bool) {
+	if len(series.Datapoints) > 0 {
+		startSourceAt = series.Datapoints[0].Ts
+	}
+
 	var n float64
 	var sumI float64
 	var sumII float64
