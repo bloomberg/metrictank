@@ -111,6 +111,8 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 		fmt.Println("DOM DEBUG acutal interval:", serie.Interval, "deduced:", deducedInterval)
 		startTargetAt := normalize(s.startTargetAt, deducedInterval)
 		fmt.Println("DOM DEBUG base start target at:", s.startTargetAt, "normalized", startTargetAt)
+		endTargetAt := normalize(s.endTargetAt, deducedInterval)
+		fmt.Println("DOM DEBUG base end target at:", s.endTargetAt, "normalized", endTargetAt)
 
 		factor, offset, isValid := linearRegressionAnalysis(serie, serie.QueryFrom)
 		if !isValid {
@@ -118,9 +120,9 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 		}
 		fmt.Println("DOM DEBUG factor:", factor, "offset:", offset)
 
-		datapoints := pointSlicePool.GetMin(int((s.endTargetAt - startTargetAt) / deducedInterval))
+		datapoints := pointSlicePool.GetMin(int((endTargetAt - startTargetAt) / deducedInterval))
                 //for i := 0; i < int((s.endTargetAt - startTargetAt) / deducedInterval); i++ {
-		for i := 0; i < len(serie.Datapoints); i++ {
+		for i := 0; i < int((endTargetAt - startTargetAt) / deducedInterval); i++ {
 			fmt.Println("startTargetAt:", startTargetAt, "i:", i)
 			datapoint := schema.Point{
 				Val: offset + (float64(startTargetAt)+float64(i)*float64(deducedInterval))*factor,
