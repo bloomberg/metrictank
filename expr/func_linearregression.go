@@ -67,14 +67,14 @@ func (s *FuncLinearRegression) parseSourceAt() error {
 	}
 	now := time.Now()
 
-	defaultStartSourceAt := uint32(now.Add(-24 * time.Hour).Unix())
-	s.startSource, err = dur.ParseDateTime(s.startSourceAt, loc, now, defaultStartSourceAt)
+	defaultStartSource := uint32(now.Add(-24 * time.Hour).Unix())
+	s.startSource, err = dur.ParseDateTime(s.startSourceAt, loc, now, defaultStartSource)
 	if err != nil {
 		return fmt.Errorf("failed to parse 'startSourceAt' argument %q: %w", s.startSourceAt, err)
 	}
 
-	defaultEndSourceAt := uint32(now.Unix())
-	s.endSource, err = dur.ParseDateTime(s.endSourceAt, loc, now, defaultEndSourceAt)
+	defaultEndSource := uint32(now.Unix())
+	s.endSource, err = dur.ParseDateTime(s.endSourceAt, loc, now, defaultEndSource)
 	if err != nil {
 		return fmt.Errorf("failed to parse 'endSourceAt' argument %q: %w", s.endSourceAt, err)
 	}
@@ -95,13 +95,13 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 			continue
 		}
 
-		startTarget := normalize(s.startTarget, serie.Interval)
-		size := int((s.endTarget-startTarget)/serie.Interval + 1)
+		normalizedStartTarget := normalize(s.startTarget, serie.Interval)
+		size := int((s.endTarget-normalizedStartTarget)/serie.Interval + 1)
 		datapoints := pointSlicePool.GetMin(size)
 		for i := 0; i < size; i++ {
 			datapoint := schema.Point{
-				Val: offset + (float64(startTarget)+float64(i)*float64(serie.Interval))*factor,
-				Ts:  startTarget + uint32(i)*serie.Interval,
+				Val: offset + (float64(normalizedStartTarget)+float64(i)*float64(serie.Interval))*factor,
+				Ts:  normalizedStartTarget + uint32(i)*serie.Interval,
 			}
 			datapoints = append(datapoints, datapoint)
 		}
@@ -122,10 +122,10 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 }
 
 func linearRegressionAnalysis(series models.Series) (float64, float64, bool) {
-	startSourceAt := series.QueryFrom // todo check if this is still needed
+	startSource := series.QueryFrom // todo check if this is still needed
 	// i think this was because the sumseries didnt normalize this properly
 	if len(series.Datapoints) > 0 {
-		startSourceAt = series.Datapoints[0].Ts
+		startSource = series.Datapoints[0].Ts
 	}
 
 	var n float64
@@ -150,7 +150,7 @@ func linearRegressionAnalysis(series models.Series) (float64, float64, bool) {
 		return 0, 0, false
 	}
 	factor := (n*sumIV - sumI*sumV) / denominator / float64(series.Interval)
-	offset := (sumII*sumV-sumIV*sumI)/denominator - factor*float64(startSourceAt)
+	offset := (sumII*sumV-sumIV*sumI)/denominator - factor*float64(startSource)
 
 	return factor, offset, true
 }
