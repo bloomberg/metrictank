@@ -69,12 +69,12 @@ func TestLinearRegression(t *testing.T) {
 	}}
 
 	expected := []models.Series{{
-		Target: "linearRegression(test.value, 1200, 1500)",
+		Target: "linearRegression(test.value, 180, 480)",
 		Tags: map[string]string{
 			"test":              "value",
-			"linearRegressions": "1200, 1500",
+			"linearRegressions": "180, 480",
 		},
-		QueryPatt: "linearRegression(test.value, 1200, 1500)",
+		QueryPatt: "linearRegression(test.value, 180, 480)",
 		Interval:  60,
 		QueryFrom: 1200,
 		QueryTo:   1500,
