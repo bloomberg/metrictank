@@ -13,10 +13,10 @@ import (
 type FuncLinearRegression struct {
 	in GraphiteFunc
 
-	startSourceAt string
-	endSourceAt   string
+	startSourceAt       string
+	endSourceAt         string
 	parsedStartSourceAt uint32
-	parsedEndSourceAt uint32
+	parsedEndSourceAt   uint32
 
 	startTargetAt uint32
 	endTargetAt   uint32
@@ -53,7 +53,7 @@ func (s *FuncLinearRegression) Context(context Context) Context {
 
 	if err := s.parseSourceAt(); err != nil {
 		fmt.Println("DOM DEBUG PARSE ERR:", err)
-	}// todo handle error
+	} // todo handle error
 	context.from = s.parsedStartSourceAt
 	context.to = s.parsedEndSourceAt
 
@@ -85,8 +85,8 @@ func (s *FuncLinearRegression) parseSourceAt() error {
 
 func normalize(timestamp, interval uint32) uint32 {
 	fmt.Println("DOM DEBUG timestamp:", timestamp, "interval:", interval)
-	fmt.Println("timestamp / interval:", timestamp / interval)
-	fmt.Println("timestamp / interval * interval:", timestamp / interval * interval)
+	fmt.Println("timestamp / interval:", timestamp/interval)
+	fmt.Println("timestamp / interval * interval:", timestamp/interval*interval)
 	normalized := timestamp / interval * interval
 	if normalized < timestamp {
 		normalized += interval
@@ -107,11 +107,9 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 	results := []models.Series{}
 	for _, serie := range series {
 		fmt.Println("DOM DEBUG series:", serie)
-		deducedInterval := deduceInterval(serie)
-		fmt.Println("DOM DEBUG acutal interval:", serie.Interval, "deduced:", deducedInterval)
-		startTargetAt := normalize(s.startTargetAt, deducedInterval)
+		startTargetAt := normalize(s.startTargetAt, serie.Interval)
 		fmt.Println("DOM DEBUG base start target at:", s.startTargetAt, "normalized", startTargetAt)
-		endTargetAt := normalize(s.endTargetAt, deducedInterval)
+		endTargetAt := normalize(s.endTargetAt, serie.Interval)
 		fmt.Println("DOM DEBUG base end target at:", s.endTargetAt, "normalized", endTargetAt)
 
 		factor, offset, isValid := linearRegressionAnalysis(serie, serie.QueryFrom)
@@ -120,17 +118,17 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 		}
 		fmt.Println("DOM DEBUG factor:", factor, "offset:", offset)
 
-		size := (endTargetAt - startTargetAt) / deducedInterval
-		if (endTargetAt - startTargetAt) % deducedInterval == 0 {
+		size := (endTargetAt - startTargetAt) / serie.Interval
+		if (endTargetAt-startTargetAt)%serie.Interval == 0 {
 			size++
 		}
 		datapoints := pointSlicePool.GetMin(int(size))
-                for i := 0; i < int((endTargetAt - startTargetAt) / deducedInterval); i++ {
+		for i := 0; i < int((endTargetAt-startTargetAt)/serie.Interval); i++ {
 			datapoint := schema.Point{
-				Val: offset + (float64(startTargetAt)+float64(i)*float64(deducedInterval))*factor,
-				Ts:  startTargetAt + uint32(i)*deducedInterval,
+				Val: offset + (float64(startTargetAt)+float64(i)*float64(serie.Interval))*factor,
+				Ts:  startTargetAt + uint32(i)*serie.Interval,
 			}
-			fmt.Println("DOM DEBUG:", offset, "+ (", startTargetAt, "+", i, "*", deducedInterval, ") *", factor, "=", offset + (float64(startTargetAt)+float64(i)*float64(deducedInterval))*factor, "=", datapoint.Val, "@", datapoint.Ts)
+			fmt.Println("DOM DEBUG:", offset, "+ (", startTargetAt, "+", i, "*", serie.Interval, ") *", factor, "=", offset+(float64(startTargetAt)+float64(i)*float64(serie.Interval))*factor, "=", datapoint.Val, "@", datapoint.Ts)
 			datapoints = append(datapoints, datapoint)
 		}
 
@@ -148,14 +146,6 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 		results = append(results, newSeries)
 	}
 	return results, nil
-}
-
-func deduceInterval(series models.Series) uint32 {
-	if len(series.Datapoints) < 2 {
-		return 0
-	}
-
-	return series.Datapoints[1].Ts - series.Datapoints[0].Ts
 }
 
 func linearRegressionAnalysis(series models.Series, startSourceAt uint32) (float64, float64, bool) {
