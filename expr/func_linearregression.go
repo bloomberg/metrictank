@@ -120,10 +120,12 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 		}
 		fmt.Println("DOM DEBUG factor:", factor, "offset:", offset)
 
-		datapoints := pointSlicePool.GetMin(int((endTargetAt - startTargetAt) / deducedInterval))
-                //for i := 0; i < int((s.endTargetAt - startTargetAt) / deducedInterval); i++ {
-		for i := 0; i < int((endTargetAt - startTargetAt) / deducedInterval); i++ {
-			fmt.Println("startTargetAt:", startTargetAt, "i:", i)
+		size := (endTargetAt - startTargetAt) / deducedInterval
+		if (endTargetAt - startTargetAt) % deducedInterval == 0 {
+			size++
+		}
+		datapoints := pointSlicePool.GetMin(int(size))
+                for i := 0; i < int((endTargetAt - startTargetAt) / deducedInterval); i++ {
 			datapoint := schema.Point{
 				Val: offset + (float64(startTargetAt)+float64(i)*float64(deducedInterval))*factor,
 				Ts:  startTargetAt + uint32(i)*deducedInterval,
