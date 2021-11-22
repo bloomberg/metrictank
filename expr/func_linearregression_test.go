@@ -8,8 +8,10 @@ import (
 	"github.com/grafana/metrictank/schema"
 )
 
+// todo these tests are black boxd now, unless this is changed to panic
 /*func TestLinearRegressionInvalidStartSourceAt(t *testing.T) {
 	funcLinearRegression := FuncLinearRegression{
+		in: NewMock([]models.Series{}),
 		startSourceAt: "test",
 	}
 
@@ -106,21 +108,40 @@ func TestLinearRegression(t *testing.T) {
 		},
 	}}
 
+	testLinearRegression(t, "00:03 19700101", "00:08 19700101", 1200, 1500, in, expected)
+}
+
+func testLinearRegression(t *testing.T, startSourceAt string, endSourceAt string, startTargetAt uint32, endTargetAt uint32, input []models.Series, expected []models.Series) {
+	inputCopy := models.SeriesCopy(input) // to later verify that it is unchanged
+
 	funcLinearRegression := FuncLinearRegression{
-		in:            NewMock(in),
-		startSourceAt: "00:03 19700101",
-		endSourceAt:   "00:08 19700101",
+		in:            NewMock(input),
+		startSourceAt: startSourceAt,
+		endSourceAt:   endSourceAt,
 	}
-	funcLinearRegression.Context(Context{
-		from: 1200,
-		to:   1500,
+
+	context := Context{
+		from: startTargetAt,
+		to:   endTargetAt,
+	}
+	newContext := funcLinearRegression.Context(context)
+	t.Run("ModifiedContext", func(t *testing.T) {
+		if newContext.from == context.from || newContext.to == context.to {
+			t.Fatal("context was not modified by linear regression function")
+		}
 	})
 
-	actual, err := funcLinearRegression.Exec(initDataMap(in))
+	actual, err := funcLinearRegression.Exec(initDataMap(input))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := equalOutput(expected, actual, nil, err); err != nil {
 		t.Fatal(err)
 	}
+
+	t.Run("DidNotModifyInput", func(t *testing.T) {
+		if err := equalOutput(inputCopy, input, nil, nil); err != nil {
+			t.Fatal("Input was modified: ", err)
+		}
+	})
 }
