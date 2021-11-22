@@ -298,7 +298,6 @@ func testLinearRegression(t *testing.T, startSourceAt string, endSourceAt string
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println("actual", actual, "expected", expected)
 	if err := equalOutput(expected, actual, nil, err); err != nil {
 		t.Fatal(err)
 	}
