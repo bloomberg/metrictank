@@ -83,18 +83,6 @@ func (s *FuncLinearRegression) parseSourceAt() error {
 	return nil
 }
 
-func normalize(timestamp, interval uint32) uint32 {
-	fmt.Println("DOM DEBUG timestamp:", timestamp, "interval:", interval)
-	fmt.Println("timestamp / interval:", timestamp/interval)
-	fmt.Println("timestamp / interval * interval:", timestamp/interval*interval)
-	normalized := timestamp / interval * interval
-	if normalized < timestamp {
-		normalized += interval
-	}
-
-	return normalized
-}
-
 func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 	fmt.Println("DOM DEBUG dataMap:", dataMap)
 
@@ -107,22 +95,18 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 	results := []models.Series{}
 	for _, serie := range series {
 		fmt.Println("DOM DEBUG series:", serie)
-		startTargetAt := normalize(s.startTargetAt, serie.Interval)
-		fmt.Println("DOM DEBUG base start target at:", s.startTargetAt, "normalized", startTargetAt)
-		endTargetAt := normalize(s.endTargetAt, serie.Interval)
-		fmt.Println("DOM DEBUG base end target at:", s.endTargetAt, "normalized", endTargetAt)
 
-		factor, offset, isValid := linearRegressionAnalysis(serie, serie.QueryFrom)
+		factor, offset, isValid := linearRegressionAnalysis(serie)
 		if !isValid {
 			continue
 		}
 		fmt.Println("DOM DEBUG factor:", factor, "offset:", offset)
 
-		size := (endTargetAt - startTargetAt) / serie.Interval
-		if (endTargetAt-startTargetAt)%serie.Interval == 0 {
-			size++
-		}
-		datapoints := pointSlicePool.GetMin(int(size))
+		startTargetAt := normalize(s.startTargetAt, serie.Interval)
+		fmt.Println("DOM DEBUG base start target at:", s.startTargetAt, "normalized", startTargetAt)
+		endTargetAt := normalize(s.endTargetAt, serie.Interval)
+		fmt.Println("DOM DEBUG base end target at:", s.endTargetAt, "normalized", endTargetAt)
+		datapoints := pointSlicePool.GetMin(int((endTargetAt - startTargetAt) / serie.Interval))
 		for i := 0; i < int((endTargetAt-startTargetAt)/serie.Interval); i++ {
 			datapoint := schema.Point{
 				Val: offset + (float64(startTargetAt)+float64(i)*float64(serie.Interval))*factor,
@@ -148,7 +132,9 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 	return results, nil
 }
 
-func linearRegressionAnalysis(series models.Series, startSourceAt uint32) (float64, float64, bool) {
+func linearRegressionAnalysis(series models.Series) (float64, float64, bool) {
+	startSourceAt := series.QueryFrom // todo check if this is still needed
+	// i think this was because the sumseries didnt normalize this properly
 	if len(series.Datapoints) > 0 {
 		startSourceAt = series.Datapoints[0].Ts
 	}
@@ -182,4 +168,16 @@ func linearRegressionAnalysis(series models.Series, startSourceAt uint32) (float
 	factor := (n*sumIV - sumI*sumV) / denominator / float64(series.Interval)
 	offset := (sumII*sumV-sumIV*sumI)/denominator - factor*float64(startSourceAt)
 	return factor, offset, true
+}
+
+func normalize(timestamp, interval uint32) uint32 {
+	fmt.Println("DOM DEBUG timestamp:", timestamp, "interval:", interval)
+	fmt.Println("timestamp / interval:", timestamp/interval)
+	fmt.Println("timestamp / interval * interval:", timestamp/interval*interval)
+	normalized := timestamp / interval * interval
+	if normalized < timestamp {
+		normalized += interval
+	}
+
+	return normalized
 }
