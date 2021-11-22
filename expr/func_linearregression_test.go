@@ -115,7 +115,7 @@ func TestLinearRegression(t *testing.T) {
 
 func TestLinearRegressionRelative(t *testing.T) {
 	now := uint32(time.Now().Unix())
-	now = now / 60 * 60 // normalize as this complicates the test
+	now = now / 60 * 60 // normalize to prevent test fragility
 
 	in := []models.Series{{
 		Target: "test.value",

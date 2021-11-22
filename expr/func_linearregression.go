@@ -13,13 +13,13 @@ import (
 type FuncLinearRegression struct {
 	in GraphiteFunc
 
-	startSourceAt       string
-	endSourceAt         string
-	parsedStartSourceAt uint32
-	parsedEndSourceAt   uint32
+	startSourceAt string // at(1) format
+	endSourceAt   string
+	startSource   uint32 // epoch seconds
+	endSource     uint32
 
-	startTargetAt uint32
-	endTargetAt   uint32
+	startTarget uint32 // epoch seconds
+	endTarget   uint32
 }
 
 func NewLinearRegression() GraphiteFunc {
@@ -48,14 +48,14 @@ func (s *FuncLinearRegression) Signature() ([]Arg, []Arg) {
 }
 
 func (s *FuncLinearRegression) Context(context Context) Context {
-	s.startTargetAt = context.from
-	s.endTargetAt = context.to
+	s.startTarget = context.from
+	s.endTarget = context.to
 
 	if err := s.parseSourceAt(); err != nil {
 		return context // todo panic?
 	}
-	context.from = s.parsedStartSourceAt
-	context.to = s.parsedEndSourceAt
+	context.from = s.startSource
+	context.to = s.endSource
 
 	return context
 }
@@ -68,13 +68,13 @@ func (s *FuncLinearRegression) parseSourceAt() error {
 	now := time.Now()
 
 	defaultStartSourceAt := uint32(now.Add(-24 * time.Hour).Unix())
-	s.parsedStartSourceAt, err = dur.ParseDateTime(s.startSourceAt, loc, now, defaultStartSourceAt)
+	s.startSource, err = dur.ParseDateTime(s.startSourceAt, loc, now, defaultStartSourceAt)
 	if err != nil {
 		return fmt.Errorf("failed to parse 'startSourceAt' argument %q: %w", s.startSourceAt, err)
 	}
 
 	defaultEndSourceAt := uint32(now.Unix())
-	s.parsedEndSourceAt, err = dur.ParseDateTime(s.endSourceAt, loc, now, defaultEndSourceAt)
+	s.endSource, err = dur.ParseDateTime(s.endSourceAt, loc, now, defaultEndSourceAt)
 	if err != nil {
 		return fmt.Errorf("failed to parse 'endSourceAt' argument %q: %w", s.endSourceAt, err)
 	}
@@ -95,25 +95,24 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 			continue
 		}
 
-		startTargetAt := normalize(s.startTargetAt, serie.Interval)
-		size := int((s.endTargetAt-startTargetAt)/serie.Interval + 1)
-
+		startTarget := normalize(s.startTarget, serie.Interval)
+		size := int((s.endTarget-startTarget)/serie.Interval + 1)
 		datapoints := pointSlicePool.GetMin(size)
 		for i := 0; i < size; i++ {
 			datapoint := schema.Point{
-				Val: offset + (float64(startTargetAt)+float64(i)*float64(serie.Interval))*factor,
-				Ts:  startTargetAt + uint32(i)*serie.Interval,
+				Val: offset + (float64(startTarget)+float64(i)*float64(serie.Interval))*factor,
+				Ts:  startTarget + uint32(i)*serie.Interval,
 			}
 			datapoints = append(datapoints, datapoint)
 		}
 
 		newSeries := serie.Copy([]schema.Point{})
-		newSeries.Target = fmt.Sprintf("linearRegression(%s, %d, %d)", serie.Target, s.parsedStartSourceAt, s.parsedEndSourceAt)
+		newSeries.Target = fmt.Sprintf("linearRegression(%s, %d, %d)", serie.Target, s.startSource, s.endSource)
 		newSeries.Datapoints = datapoints
-		newSeries.Tags["linearRegressions"] = fmt.Sprintf("%d, %d", s.parsedStartSourceAt, s.parsedEndSourceAt)
+		newSeries.Tags["linearRegressions"] = fmt.Sprintf("%d, %d", s.startSource, s.endSource) // todo clear tags?
 		newSeries.QueryPatt = newSeries.Target
-		newSeries.QueryFrom = s.startTargetAt
-		newSeries.QueryTo = s.endTargetAt
+		newSeries.QueryFrom = s.startTarget
+		newSeries.QueryTo = s.endTarget
 
 		results = append(results, newSeries)
 	}
