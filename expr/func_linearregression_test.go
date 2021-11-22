@@ -129,27 +129,27 @@ func TestLinearRegressionRelative(t *testing.T) {
 		Datapoints: []schema.Point{
 			{
 				Val: 3,
-				Ts:  now-1320,
+				Ts:  now - 1320,
 			},
 			{
 				Val: math.NaN(),
-				Ts:  now-1260,
+				Ts:  now - 1260,
 			},
 			{
 				Val: 5,
-				Ts:  now-1200,
+				Ts:  now - 1200,
 			},
 			{
 				Val: 6,
-				Ts:  now-1140,
+				Ts:  now - 1140,
 			},
 			{
 				Val: math.NaN(),
-				Ts:  now-1080,
+				Ts:  now - 1080,
 			},
 			{
 				Val: 8,
-				Ts:  now-1020,
+				Ts:  now - 1020,
 			},
 		},
 	}}
@@ -162,28 +162,28 @@ func TestLinearRegressionRelative(t *testing.T) {
 		},
 		QueryPatt: "linearRegression(test.value, 180, 480)",
 		Interval:  60,
-		QueryFrom: now-300,
+		QueryFrom: now - 300,
 		QueryTo:   now,
 		Datapoints: []schema.Point{
 			{
 				Val: 20,
-				Ts:  now-300,
+				Ts:  now - 300,
 			},
 			{
 				Val: 21,
-				Ts:  now-240,
+				Ts:  now - 240,
 			},
 			{
 				Val: 22,
-				Ts:  now-180,
+				Ts:  now - 180,
 			},
 			{
 				Val: 23,
-				Ts:  now-120,
+				Ts:  now - 120,
 			},
 			{
 				Val: 24,
-				Ts:  now-60,
+				Ts:  now - 60,
 			},
 			{
 				Val: 25,
@@ -193,6 +193,85 @@ func TestLinearRegressionRelative(t *testing.T) {
 	}}
 
 	testLinearRegression(t, "00:03 19700101", "00:08 19700101", now-300, now, in, expected)
+}
+
+func TestLinearRegressionNormalization(t *testing.T) {
+	in := []models.Series{{
+		Target: "test.value",
+		Tags: map[string]string{
+			"test": "value",
+		},
+		QueryPatt: "test.value",
+		Interval:  60,
+		QueryFrom: 120,
+		QueryTo:   540,
+		Datapoints: []schema.Point{
+			{
+				Val: 3,
+				Ts:  180,
+			},
+			{
+				Val: math.NaN(),
+				Ts:  240,
+			},
+			{
+				Val: 5,
+				Ts:  300,
+			},
+			{
+				Val: 6,
+				Ts:  360,
+			},
+			{
+				Val: math.NaN(),
+				Ts:  420,
+			},
+			{
+				Val: 8,
+				Ts:  480,
+			},
+		},
+	}}
+
+	expected := []models.Series{{
+		Target: "linearRegression(test.value, 180, 480)",
+		Tags: map[string]string{
+			"test":              "value",
+			"linearRegressions": "180, 480",
+		},
+		QueryPatt: "linearRegression(test.value, 180, 480)",
+		Interval:  60,
+		QueryFrom: 1199,
+		QueryTo:   1501,
+		Datapoints: []schema.Point{
+			{
+				Val: 20,
+				Ts:  1200,
+			},
+			{
+				Val: 21,
+				Ts:  1260,
+			},
+			{
+				Val: 22,
+				Ts:  1320,
+			},
+			{
+				Val: 23,
+				Ts:  1380,
+			},
+			{
+				Val: 24,
+				Ts:  1440,
+			},
+			{
+				Val: 25,
+				Ts:  1500,
+			},
+		},
+	}}
+
+	testLinearRegression(t, "00:03 19700101", "00:08 19700101", 1199, 1501, in, expected)
 }
 
 func testLinearRegression(t *testing.T, startSourceAt string, endSourceAt string, startTargetAt uint32, endTargetAt uint32, input []models.Series, expected []models.Series) {
