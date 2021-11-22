@@ -96,8 +96,7 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 		}
 
 		startTargetAt := normalize(s.startTargetAt, serie.Interval)
-		endTargetAt := normalize(s.endTargetAt, serie.Interval)
-		size := int((endTargetAt - startTargetAt) / serie.Interval)
+		size := int((s.endTargetAt-startTargetAt)/serie.Interval + 1)
 
 		datapoints := pointSlicePool.GetMin(size)
 		for i := 0; i < size; i++ {
