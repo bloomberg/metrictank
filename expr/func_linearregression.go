@@ -118,6 +118,8 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 
 		results = append(results, newSeries)
 	}
+
+	dataMap.Add(Req{}, results...)
 	return results, nil
 }
 
