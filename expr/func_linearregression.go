@@ -52,8 +52,8 @@ func (s *FuncLinearRegression) Context(context Context) Context {
 	s.endTargetAt = context.to
 
 	if err := s.parseSourceAt(); err != nil {
-		fmt.Println("DOM DEBUG PARSE ERR:", err)
-	} // todo handle error
+		return context // todo panic?
+	}
 	context.from = s.parsedStartSourceAt
 	context.to = s.parsedEndSourceAt
 
@@ -65,7 +65,6 @@ func (s *FuncLinearRegression) parseSourceAt() error {
 	if err != nil {
 		return fmt.Errorf("failed to load location: %w", err)
 	}
-
 	now := time.Now()
 
 	defaultStartSourceAt := uint32(now.Add(-24 * time.Hour).Unix())
@@ -84,49 +83,39 @@ func (s *FuncLinearRegression) parseSourceAt() error {
 }
 
 func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
-	fmt.Println("DOM DEBUG dataMap:", dataMap)
-
 	series, err := s.in.Exec(dataMap)
 	if err != nil {
 		return nil, err
 	}
 
-	fmt.Println("DOM DEBUG s.parsedStartSourceAt:", s.parsedStartSourceAt, "s.parsedEndSourceAt:", s.parsedEndSourceAt, "startTargetAt:", s.startTargetAt, "endTargetAt:", s.endTargetAt)
 	results := []models.Series{}
 	for _, serie := range series {
-		fmt.Println("DOM DEBUG series:", serie)
-
 		factor, offset, isValid := linearRegressionAnalysis(serie)
 		if !isValid {
 			continue
 		}
-		fmt.Println("DOM DEBUG factor:", factor, "offset:", offset)
 
 		startTargetAt := normalize(s.startTargetAt, serie.Interval)
-		fmt.Println("DOM DEBUG base start target at:", s.startTargetAt, "normalized", startTargetAt)
 		endTargetAt := normalize(s.endTargetAt, serie.Interval)
-		fmt.Println("DOM DEBUG base end target at:", s.endTargetAt, "normalized", endTargetAt)
-		datapoints := pointSlicePool.GetMin(int((endTargetAt - startTargetAt) / serie.Interval))
-		for i := 0; i < int((endTargetAt-startTargetAt)/serie.Interval); i++ {
+		size := int((endTargetAt - startTargetAt) / serie.Interval)
+
+		datapoints := pointSlicePool.GetMin(size)
+		for i := 0; i < size; i++ {
 			datapoint := schema.Point{
 				Val: offset + (float64(startTargetAt)+float64(i)*float64(serie.Interval))*factor,
 				Ts:  startTargetAt + uint32(i)*serie.Interval,
 			}
-			fmt.Println("DOM DEBUG:", offset, "+ (", startTargetAt, "+", i, "*", serie.Interval, ") *", factor, "=", offset+(float64(startTargetAt)+float64(i)*float64(serie.Interval))*factor, "=", datapoint.Val, "@", datapoint.Ts)
 			datapoints = append(datapoints, datapoint)
 		}
 
-		name := fmt.Sprintf("linearRegression(%s, %d, %d)", serie.Target, s.parsedStartSourceAt, s.parsedEndSourceAt)
-
 		newSeries := serie.Copy([]schema.Point{})
-		newSeries.Target = name
+		newSeries.Target = fmt.Sprintf("linearRegression(%s, %d, %d)", serie.Target, s.parsedStartSourceAt, s.parsedEndSourceAt)
 		newSeries.Datapoints = datapoints
 		newSeries.Tags["linearRegressions"] = fmt.Sprintf("%d, %d", s.parsedStartSourceAt, s.parsedEndSourceAt)
-		newSeries.QueryPatt = name
+		newSeries.QueryPatt = newSeries.Target
 		newSeries.QueryFrom = s.startTargetAt
 		newSeries.QueryTo = s.endTargetAt
 
-		fmt.Println("newSeries:", newSeries)
 		results = append(results, newSeries)
 	}
 	return results, nil
@@ -144,8 +133,6 @@ func linearRegressionAnalysis(series models.Series) (float64, float64, bool) {
 	var sumII float64
 	var sumV float64
 	var sumIV float64
-
-	fmt.Println("DOM DEBUG series.Interval:", series.Interval, "startSourceAt:", startSourceAt)
 	for i, point := range series.Datapoints {
 		if math.IsNaN(point.Val) {
 			continue
@@ -157,23 +144,18 @@ func linearRegressionAnalysis(series models.Series) (float64, float64, bool) {
 		sumV += point.Val
 		sumIV += float64(i) * point.Val
 	}
-	fmt.Println("DOM DEBUG n:", n, "sumI:", sumI, "sumV:", sumV, "sumII:", sumII, "sumIV:", sumIV)
 
 	denominator := n*sumII - sumI*sumI
-	fmt.Println("DOM DEBUG denominator:", denominator)
 	if denominator == 0 {
 		return 0, 0, false
 	}
-
 	factor := (n*sumIV - sumI*sumV) / denominator / float64(series.Interval)
 	offset := (sumII*sumV-sumIV*sumI)/denominator - factor*float64(startSourceAt)
+
 	return factor, offset, true
 }
 
 func normalize(timestamp, interval uint32) uint32 {
-	fmt.Println("DOM DEBUG timestamp:", timestamp, "interval:", interval)
-	fmt.Println("timestamp / interval:", timestamp/interval)
-	fmt.Println("timestamp / interval * interval:", timestamp/interval*interval)
 	normalized := timestamp / interval * interval
 	if normalized < timestamp {
 		normalized += interval
