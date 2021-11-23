@@ -61,7 +61,7 @@ func (s *FuncLinearRegression) Context(context Context) Context {
 }
 
 func (s *FuncLinearRegression) parseSourceAt() error {
-	loc, err := time.LoadLocation("") // todo, no idea what timezone to use here, utc is a reasonable default
+	loc, err := time.LoadLocation("")
 	if err != nil {
 		return fmt.Errorf("failed to load location: %w", err)
 	}
