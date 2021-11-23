@@ -122,8 +122,9 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 }
 
 func linearRegressionAnalysis(series models.Series) (float64, float64, bool) {
-	startSource := series.QueryFrom // todo check if this is still needed
-	// i think this was because the sumseries didnt normalize this properly
+	// Some functions normalize the series' datapoint timestamps,
+	// but not the series' QueryFrom/QueryTo fields.
+	startSource := series.QueryFrom
 	if len(series.Datapoints) > 0 {
 		startSource = series.Datapoints[0].Ts
 	}
