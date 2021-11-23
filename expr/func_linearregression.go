@@ -34,13 +34,13 @@ func (s *FuncLinearRegression) Signature() ([]Arg, []Arg) {
 			ArgString{
 				key:       "startSourceAt",
 				opt:       true,
-				validator: []Validator{IsATTime},
+				validator: []Validator{IsRenderTimeFormat},
 				val:       &s.startSourceAt,
 			},
 			ArgString{
 				key:       "endSourceAt",
 				opt:       true,
-				validator: []Validator{IsATTime},
+				validator: []Validator{IsRenderTimeFormat},
 				val:       &s.endSourceAt,
 			},
 		},
