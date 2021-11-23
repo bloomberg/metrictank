@@ -1,7 +1,6 @@
 package expr
 
 import (
-	"fmt"
 	"math"
 	"testing"
 	"time"
@@ -42,8 +41,8 @@ func TestLinearRegression(t *testing.T) {
 		},
 		QueryPatt: "test.value",
 		Interval:  60,
-		QueryFrom: 120,
-		QueryTo:   540,
+		QueryFrom: 180,
+		QueryTo:   480,
 		Datapoints: []schema.Point{
 			{
 				Val: 3,
@@ -124,8 +123,8 @@ func TestLinearRegressionRelative(t *testing.T) {
 		},
 		QueryPatt: "test.value",
 		Interval:  60,
-		QueryFrom: 120,
-		QueryTo:   540,
+		QueryFrom: now-1320,
+		QueryTo:   now-1020,
 		Datapoints: []schema.Point{
 			{
 				Val: 3,
@@ -155,12 +154,12 @@ func TestLinearRegressionRelative(t *testing.T) {
 	}}
 
 	expected := []models.Series{{
-		Target: "linearRegression(test.value, 180, 480)",
+		Target: fmt.Sprintf("linearRegression(test.value, %d, %d)", now-1320, now-1020),
 		Tags: map[string]string{
 			"test":              "value",
-			"linearRegressions": "180, 480",
+			"linearRegressions": fmt.Sprintf(%d, %d), now-1320, now-1020),
 		},
-		QueryPatt: "linearRegression(test.value, 180, 480)",
+		QueryPatt: fmt.Sprintf("linearRegression(test.value, %d, %d)", now-1320, now-1020),
 		Interval:  60,
 		QueryFrom: now - 300,
 		QueryTo:   now,
@@ -179,7 +178,7 @@ func TestLinearRegressionRelative(t *testing.T) {
 			},
 			{
 				Val: 23,
-				Ts:  now - 120,
+				Ts:  now - 180,
 			},
 			{
 				Val: 24,
@@ -192,7 +191,7 @@ func TestLinearRegressionRelative(t *testing.T) {
 		},
 	}}
 
-	testLinearRegression(t, "00:03 19700101", "00:08 19700101", now-300, now, in, expected)
+	testLinearRegression(t, "now-1320s", "now-1020s", now-300, now, in, expected)
 }
 
 func TestLinearRegressionNormalization(t *testing.T) {
@@ -203,8 +202,8 @@ func TestLinearRegressionNormalization(t *testing.T) {
 		},
 		QueryPatt: "test.value",
 		Interval:  60,
-		QueryFrom: 120,
-		QueryTo:   540,
+		QueryFrom: 180,
+		QueryTo:   480,
 		Datapoints: []schema.Point{
 			{
 				Val: 3,
