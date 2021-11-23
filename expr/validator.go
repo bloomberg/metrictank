@@ -1,6 +1,7 @@
 package expr
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/grafana/metrictank/consolidation"
@@ -81,16 +82,18 @@ func WithinZeroOneInclusiveInterval(e *expr) error {
 	return nil
 }
 
-// maybe IsDateTime?
-func IsATTime(e *expr) error {
+// at(1) format
+func IsRenderTimeFormat(e *expr) error {
 	loc, err := time.LoadLocation("")
-	// todo, figure out if there's a point in using a location ehre at all
-	// todo error chekcing
+	if err != nil {
+		return fmt.Errorf("failed to load default timezone location: %w", err)
+	}
 
 	now := time.Now()
 	_, err = dur.ParseDateTime(e.str, loc, now, uint32(now.Unix()))
 	if err != nil {
-		return err // todo probably return something else
+		return fmt.Errorf("failed to parse date time %q: %w", e.str, err)
 	}
+
 	return nil
 }
