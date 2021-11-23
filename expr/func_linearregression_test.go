@@ -290,7 +290,7 @@ func testLinearRegression(t *testing.T, startSourceAt string, endSourceAt string
 	newContext := funcLinearRegression.Context(context)
 	t.Run("ModifiedContext", func(t *testing.T) {
 		if newContext.from == context.from || newContext.to == context.to {
-			t.Fatal("context was not modified by linear regression function")
+			t.Fatal("the context is expected to be modified by the linear regression function")
 		}
 	})
 
