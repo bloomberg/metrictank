@@ -109,7 +109,7 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 		newSeries := serie.Copy([]schema.Point{})
 		newSeries.Target = fmt.Sprintf("linearRegression(%s, %d, %d)", serie.Target, s.startSource, s.endSource)
 		newSeries.Datapoints = datapoints
-		newSeries.Tags["linearRegressions"] = fmt.Sprintf("%d, %d", s.startSource, s.endSource) // todo clear tags?
+		newSeries.Tags["linearRegressions"] = fmt.Sprintf("%d, %d", s.startSource, s.endSource)
 		newSeries.QueryPatt = newSeries.Target
 		newSeries.QueryFrom = s.startTarget
 		newSeries.QueryTo = s.endTarget
