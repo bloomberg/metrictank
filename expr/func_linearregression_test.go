@@ -1,6 +1,7 @@
 package expr
 
 import (
+	"fmt"
 	"math"
 	"testing"
 	"time"
@@ -114,7 +115,7 @@ func TestLinearRegression(t *testing.T) {
 
 func TestLinearRegressionRelative(t *testing.T) {
 	now := uint32(time.Now().Unix())
-	now = now / 60 * 60 // normalize to prevent test fragility
+	normalizedNow := now / 60 * 60 // normalize to prevent test fragility
 
 	in := []models.Series{{
 		Target: "test.value",
@@ -123,32 +124,32 @@ func TestLinearRegressionRelative(t *testing.T) {
 		},
 		QueryPatt: "test.value",
 		Interval:  60,
-		QueryFrom: now-1320,
-		QueryTo:   now-1020,
+		QueryFrom: normalizedNow - 1320,
+		QueryTo:   normalizedNow - 1020,
 		Datapoints: []schema.Point{
 			{
 				Val: 3,
-				Ts:  now - 1320,
+				Ts:  normalizedNow - 1320,
 			},
 			{
 				Val: math.NaN(),
-				Ts:  now - 1260,
+				Ts:  normalizedNow - 1260,
 			},
 			{
 				Val: 5,
-				Ts:  now - 1200,
+				Ts:  normalizedNow - 1200,
 			},
 			{
 				Val: 6,
-				Ts:  now - 1140,
+				Ts:  normalizedNow - 1140,
 			},
 			{
 				Val: math.NaN(),
-				Ts:  now - 1080,
+				Ts:  normalizedNow - 1080,
 			},
 			{
 				Val: 8,
-				Ts:  now - 1020,
+				Ts:  normalizedNow - 1020,
 			},
 		},
 	}}
@@ -157,41 +158,41 @@ func TestLinearRegressionRelative(t *testing.T) {
 		Target: fmt.Sprintf("linearRegression(test.value, %d, %d)", now-1320, now-1020),
 		Tags: map[string]string{
 			"test":              "value",
-			"linearRegressions": fmt.Sprintf(%d, %d), now-1320, now-1020),
+			"linearRegressions": fmt.Sprintf("%d, %d", now-1320, now-1020),
 		},
 		QueryPatt: fmt.Sprintf("linearRegression(test.value, %d, %d)", now-1320, now-1020),
 		Interval:  60,
-		QueryFrom: now - 300,
-		QueryTo:   now,
+		QueryFrom: normalizedNow - 300,
+		QueryTo:   normalizedNow,
 		Datapoints: []schema.Point{
 			{
 				Val: 20,
-				Ts:  now - 300,
+				Ts:  normalizedNow - 300,
 			},
 			{
 				Val: 21,
-				Ts:  now - 240,
+				Ts:  normalizedNow - 240,
 			},
 			{
 				Val: 22,
-				Ts:  now - 180,
+				Ts:  normalizedNow - 180,
 			},
 			{
 				Val: 23,
-				Ts:  now - 180,
+				Ts:  normalizedNow - 120,
 			},
 			{
 				Val: 24,
-				Ts:  now - 60,
+				Ts:  normalizedNow - 60,
 			},
 			{
 				Val: 25,
-				Ts:  now,
+				Ts:  normalizedNow,
 			},
 		},
 	}}
 
-	testLinearRegression(t, "now-1320s", "now-1020s", now-300, now, in, expected)
+	testLinearRegression(t, "now-1320s", "now-1020s", normalizedNow-300, normalizedNow, in, expected)
 }
 
 func TestLinearRegressionNormalization(t *testing.T) {
