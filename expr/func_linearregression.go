@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/grafana/metrictank/api/models"
+	"github.com/grafana/metrictank/mdata"
 	"github.com/grafana/metrictank/schema"
 	"github.com/raintank/dur"
 )
@@ -95,7 +96,7 @@ func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
 			continue
 		}
 
-		normalizedStartTarget := normalize(s.startTarget, serie.Interval)
+		normalizedStartTarget := mdata.AggBoundary(s.startTarget, serie.Interval)
 		size := int((s.endTarget-normalizedStartTarget)/serie.Interval + 1)
 		datapoints := pointSlicePool.GetMin(size)
 		for i := 0; i < size; i++ {
@@ -154,13 +155,4 @@ func linearRegressionAnalysis(series models.Series) (float64, float64, bool) {
 	offset := (sumII*sumV-sumIV*sumI)/denominator - factor*float64(startSource)
 
 	return factor, offset, true
-}
-
-func normalize(timestamp, interval uint32) uint32 {
-	normalized := timestamp / interval * interval
-	if normalized < timestamp {
-		normalized += interval
-	}
-
-	return normalized
 }
