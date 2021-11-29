@@ -3,11 +3,13 @@ package expr
 import (
 	"fmt"
 	"math"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/grafana/metrictank/api/models"
 	"github.com/grafana/metrictank/schema"
+	"github.com/grafana/metrictank/test"
 )
 
 // todo these tests are black boxd now, unless this is changed to panic
@@ -307,4 +309,65 @@ func testLinearRegression(t *testing.T, startSourceAt string, endSourceAt string
 			t.Fatal("Input was modified: ", err)
 		}
 	})
+}
+
+func BenchmarkLinearRegression10k_1NoNulls(b *testing.B) {
+	benchmarkLinearRegression(b, 1, test.RandFloats10k, test.RandFloats10k)
+}
+func BenchmarkLinearRegression10k_10NoNulls(b *testing.B) {
+	benchmarkLinearRegression(b, 10, test.RandFloats10k, test.RandFloats10k)
+}
+func BenchmarkLinearRegression10k_100NoNulls(b *testing.B) {
+	benchmarkLinearRegression(b, 100, test.RandFloats10k, test.RandFloats10k)
+}
+func BenchmarkLinearRegression10k_1000NoNulls(b *testing.B) {
+	benchmarkLinearRegression(b, 1000, test.RandFloats10k, test.RandFloats10k)
+}
+func BenchmarkLinearRegression10k_1SomeSeriesHalfNulls(b *testing.B) {
+	benchmarkLinearRegression(b, 1, test.RandFloats10k, test.RandFloatsWithNulls10k)
+}
+func BenchmarkLinearRegression10k_10SomeSeriesHalfNulls(b *testing.B) {
+	benchmarkLinearRegression(b, 10, test.RandFloats10k, test.RandFloatsWithNulls10k)
+}
+func BenchmarkLinearRegression10k_100SomeSeriesHalfNulls(b *testing.B) {
+	benchmarkLinearRegression(b, 100, test.RandFloats10k, test.RandFloatsWithNulls10k)
+}
+func BenchmarkLinearRegression10k_1000SomeSeriesHalfNulls(b *testing.B) {
+	benchmarkLinearRegression(b, 1000, test.RandFloats10k, test.RandFloatsWithNulls10k)
+}
+func BenchmarkLinearRegression10k_1AllSeriesHalfNulls(b *testing.B) {
+	benchmarkLinearRegression(b, 1, test.RandFloatsWithNulls10k, test.RandFloatsWithNulls10k)
+}
+func BenchmarkLinearRegression10k_10AllSeriesHalfNulls(b *testing.B) {
+	benchmarkLinearRegression(b, 10, test.RandFloatsWithNulls10k, test.RandFloatsWithNulls10k)
+}
+func BenchmarkLinearRegression10k_100AllSeriesHalfNulls(b *testing.B) {
+	benchmarkLinearRegression(b, 100, test.RandFloatsWithNulls10k, test.RandFloatsWithNulls10k)
+}
+func BenchmarkLinearRegression10k_1000AllSeriesHalfNulls(b *testing.B) {
+	benchmarkLinearRegression(b, 1000, test.RandFloatsWithNulls10k, test.RandFloatsWithNulls10k)
+}
+func benchmarkLinearRegression(b *testing.B, numSeries int, fn0, fn1 func() []schema.Point) {
+	var input []models.Series
+	for i := 0; i < numSeries; i++ {
+		series := models.Series{
+			QueryPatt: strconv.Itoa(i),
+		}
+		if i%2 == 0 {
+			series.Datapoints = fn0()
+		} else {
+			series.Datapoints = fn1()
+		}
+		input = append(input, series)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		f := NewLinearRegression()
+		f.(*FuncLinearRegression).in = NewMock(input)
+		got, err := f.Exec(make(map[Req][]models.Series))
+		if err != nil {
+			b.Fatalf("%s", err)
+		}
+		results = got
+	}
 }
