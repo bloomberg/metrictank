@@ -365,6 +365,7 @@ func benchmarkLinearRegression(b *testing.B, numSeries int, fn0, fn1 func() []sc
 	for i := 0; i < numSeries; i++ {
 		series := models.Series{
 			QueryPatt: strconv.Itoa(i),
+			Interval:  1,
 		}
 		if i%2 == 0 {
 			series.Datapoints = fn0()
