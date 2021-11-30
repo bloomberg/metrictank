@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/grafana/metrictank/api/models"
+	"github.com/grafana/metrictank/api/tz"
 	"github.com/grafana/metrictank/schema"
 	"github.com/grafana/metrictank/test"
 )
@@ -277,6 +278,12 @@ func TestLinearRegressionNormalization(t *testing.T) {
 }
 
 func testLinearRegression(t *testing.T, startSourceAt string, endSourceAt string, startTargetAt uint32, endTargetAt uint32, input []models.Series, expected []models.Series) {
+	var err error
+	tz.TimeZone, err = time.LoadLocation("")
+	if err != nil {
+		t.Fatalf("%s", err)
+	}
+
 	inputCopy := models.SeriesCopy(input) // to later verify that it is unchanged
 
 	funcLinearRegression := FuncLinearRegression{
@@ -348,6 +355,12 @@ func BenchmarkLinearRegression10k_1000AllSeriesHalfNulls(b *testing.B) {
 	benchmarkLinearRegression(b, 1000, test.RandFloatsWithNulls10k, test.RandFloatsWithNulls10k)
 }
 func benchmarkLinearRegression(b *testing.B, numSeries int, fn0, fn1 func() []schema.Point) {
+	var err error
+	tz.TimeZone, err = time.LoadLocation("")
+	if err != nil {
+		b.Fatalf("%s", err)
+	}
+
 	var input []models.Series
 	for i := 0; i < numSeries; i++ {
 		series := models.Series{
