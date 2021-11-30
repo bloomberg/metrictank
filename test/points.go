@@ -13,7 +13,7 @@ import (
 var randFloats = make(map[int][]schema.Point)
 var randFloatsWithNulls = make(map[int][]schema.Point)
 
-type Func func() ([]schema.Point, uint32)
+type DataFunc func() ([]schema.Point, uint32)
 
 func RandFloats100() ([]schema.Point, uint32) { return RandFloats(100), 1 }
 func RandFloats10k() ([]schema.Point, uint32) { return RandFloats(10000), 1 }

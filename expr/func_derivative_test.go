@@ -142,7 +142,7 @@ func BenchmarkDerivative10k_100AllSeriesHalfNulls(b *testing.B) {
 func BenchmarkDerivative10k_1000AllSeriesHalfNulls(b *testing.B) {
 	benchmarkDerivative(b, 1000, test.RandFloatsWithNulls10k, test.RandFloatsWithNulls10k)
 }
-func benchmarkDerivative(b *testing.B, numSeries int, fn0, fn1 test.Func) {
+func benchmarkDerivative(b *testing.B, numSeries int, fn0, fn1 test.DataFunc) {
 	var input []models.Series
 	for i := 0; i < numSeries; i++ {
 		series := models.Series{

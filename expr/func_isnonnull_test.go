@@ -146,7 +146,7 @@ func BenchmarkIsNonNull10k_1000AllSeriesHalfNulls(b *testing.B) {
 	benchmarkIsNonNull(b, 1000, test.RandFloatsWithNulls10k, test.RandFloatsWithNulls10k)
 }
 
-func benchmarkIsNonNull(b *testing.B, numSeries int, fn0, fn1 test.Func) {
+func benchmarkIsNonNull(b *testing.B, numSeries int, fn0, fn1 test.DataFunc) {
 	var input []models.Series
 	for i := 0; i < numSeries; i++ {
 		series := models.Series{

@@ -184,7 +184,7 @@ func BenchmarkNonNegativeDerivative10k_100AllSeriesHalfNulls(b *testing.B) {
 func BenchmarkNonNegativeDerivative10k_1000AllSeriesHalfNulls(b *testing.B) {
 	benchmarkNonNegativeDerivative(b, 1000, test.RandFloatsWithNulls10k, test.RandFloatsWithNulls10k)
 }
-func benchmarkNonNegativeDerivative(b *testing.B, numSeries int, fn0, fn1 test.Func) {
+func benchmarkNonNegativeDerivative(b *testing.B, numSeries int, fn0, fn1 test.DataFunc) {
 	var input []models.Series
 	for i := 0; i < numSeries; i++ {
 		series := models.Series{

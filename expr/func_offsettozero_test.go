@@ -210,7 +210,7 @@ func BenchmarkOffsetToZero10k_1000AllSeriesHalfNulls(b *testing.B) {
 	benchmarkOffsetToZero(b, 1000, test.RandFloatsWithNulls10k, test.RandFloatsWithNulls10k)
 }
 
-func benchmarkOffsetToZero(b *testing.B, numSeries int, fn0, fn1 test.Func) {
+func benchmarkOffsetToZero(b *testing.B, numSeries int, fn0, fn1 test.DataFunc) {
 	var input []models.Series
 	for i := 0; i < numSeries; i++ {
 		series := models.Series{

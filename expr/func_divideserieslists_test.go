@@ -163,7 +163,7 @@ func BenchmarkDivideSeriesLists10k_1000AllSeriesHalfNulls(b *testing.B) {
 	benchmarkDivideSeriesLists(b, 1000, test.RandFloatsWithNulls10k, test.RandFloatsWithNulls10k)
 }
 
-func benchmarkDivideSeriesLists(b *testing.B, numSeries int, fn0, fn1 test.Func) {
+func benchmarkDivideSeriesLists(b *testing.B, numSeries int, fn0, fn1 test.DataFunc) {
 	var dividends []models.Series
 	for i := 0; i < numSeries; i++ {
 		series := models.Series{

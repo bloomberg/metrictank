@@ -928,7 +928,7 @@ func BenchmarkSummarize10k_1000AllSeriesHalfNulls(b *testing.B) {
 	benchmarkSummarize(b, 1000, test.RandFloatsWithNulls10k, test.RandFloatsWithNulls10k, "1h")
 }
 
-func benchmarkSummarize(b *testing.B, numSeries int, fn0, fn1 test.Func, intervalString string) {
+func benchmarkSummarize(b *testing.B, numSeries int, fn0, fn1 test.DataFunc, intervalString string) {
 	var input []models.Series
 	for i := 0; i < numSeries; i++ {
 		series := models.Series{

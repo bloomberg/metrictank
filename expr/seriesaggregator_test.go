@@ -194,7 +194,7 @@ func BenchmarkSeriesAggregateCount10k_100WithNulls(b *testing.B) {
 	benchmarkSeriesAggregate(b, crossSeriesCount, 100, test.RandFloats10k, test.RandFloatsWithNulls10k)
 }
 
-func benchmarkSeriesAggregate(b *testing.B, aggFunc crossSeriesAggFunc, numSeries int, fn0, fn1 test.Func) {
+func benchmarkSeriesAggregate(b *testing.B, aggFunc crossSeriesAggFunc, numSeries int, fn0, fn1 test.DataFunc) {
 	var input []models.Series
 	for i := 0; i < numSeries; i++ {
 		series := models.Series{
