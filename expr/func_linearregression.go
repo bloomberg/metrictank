@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/grafana/metrictank/api/models"
+	"github.com/grafana/metrictank/api/tz"
 	"github.com/grafana/metrictank/mdata"
 	"github.com/grafana/metrictank/schema"
-	"github.com/raintank/dur"
 )
 
 type FuncLinearRegression struct {
@@ -52,35 +52,21 @@ func (s *FuncLinearRegression) Context(context Context) Context {
 	s.startTarget = context.from
 	s.endTarget = context.to
 
-	if err := s.parseSourceAt(); err != nil {
+	now := time.Now()
+	defaultFrom := uint32(now.Add(-24 * time.Hour).Unix())
+	defaultTo := uint32(now.Unix())
+	var err error
+	s.startSource, s.endSource, err = tz.GetFromTo(tz.FromTo{
+		From: s.startSourceAt,
+		To:   s.endSourceAt,
+	}, now, defaultFrom, defaultTo)
+	if err != nil {
 		return context // todo panic?
 	}
 	context.from = s.startSource
 	context.to = s.endSource
 
 	return context
-}
-
-func (s *FuncLinearRegression) parseSourceAt() error {
-	loc, err := time.LoadLocation("")
-	if err != nil {
-		return fmt.Errorf("failed to load location: %w", err)
-	}
-	now := time.Now()
-
-	defaultStartSource := uint32(now.Add(-24 * time.Hour).Unix())
-	s.startSource, err = dur.ParseDateTime(s.startSourceAt, loc, now, defaultStartSource)
-	if err != nil {
-		return fmt.Errorf("failed to parse 'startSourceAt' argument %q: %w", s.startSourceAt, err)
-	}
-
-	defaultEndSource := uint32(now.Unix())
-	s.endSource, err = dur.ParseDateTime(s.endSourceAt, loc, now, defaultEndSource)
-	if err != nil {
-		return fmt.Errorf("failed to parse 'endSourceAt' argument %q: %w", s.endSourceAt, err)
-	}
-
-	return nil
 }
 
 func (s *FuncLinearRegression) Exec(dataMap DataMap) ([]models.Series, error) {
