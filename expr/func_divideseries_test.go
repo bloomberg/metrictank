@@ -159,7 +159,7 @@ func benchmarkDivideSeries(b *testing.B, numSeries int, fn0, fn1 test.DataFunc) 
 		dividends = append(dividends, series)
 	}
 	divisor := models.Series{
-		Target:     "divisor",
+		Target: "divisor",
 	}
 	divisor.Datapoints, divisor.Interval = fn0()
 	b.ResetTimer()

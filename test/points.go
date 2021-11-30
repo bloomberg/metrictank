@@ -17,7 +17,7 @@ type DataFunc func() ([]schema.Point, uint32)
 
 func RandFloats100() ([]schema.Point, uint32) { return RandFloats(100), 1 }
 func RandFloats10k() ([]schema.Point, uint32) { return RandFloats(10000), 1 }
-func RandFloats1M() ([]schema.Point, uint32) { return RandFloats(1000000), 1 }
+func RandFloats1M() ([]schema.Point, uint32)  { return RandFloats(1000000), 1 }
 
 func RandFloats(size int) []schema.Point {
 	data, ok := randFloats[size]
