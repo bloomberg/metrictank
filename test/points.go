@@ -15,33 +15,35 @@ var randFloatsWithNulls = make(map[int][]schema.Point)
 
 type DataFunc func() ([]schema.Point, uint32)
 
-func RandFloats100() ([]schema.Point, uint32) { return RandFloats(100), 1 }
-func RandFloats10k() ([]schema.Point, uint32) { return RandFloats(10000), 1 }
-func RandFloats1M() ([]schema.Point, uint32)  { return RandFloats(1000000), 1 }
+func RandFloats100() ([]schema.Point, uint32) { return RandFloats(100) }
+func RandFloats10k() ([]schema.Point, uint32) { return RandFloats(10000) }
+func RandFloats1M() ([]schema.Point, uint32)  { return RandFloats(1000000) }
 
-func RandFloats(size int) []schema.Point {
+func RandFloats(size int) ([]schema.Point, uint32) {
 	data, ok := randFloats[size]
+	interval := 1
 	if !ok {
 		data = make([]schema.Point, size)
-		for i := 0; i < size; i++ {
+		for i := 0; i < size; i += interval {
 			data[i] = schema.Point{Val: rand.Float64(), Ts: uint32(i)}
 		}
 		randFloats[size] = data
 	}
 	out := make([]schema.Point, size)
 	copy(out, data)
-	return out
+	return out, uint32(interval)
 }
 
-func RandFloatsWithNulls100() ([]schema.Point, uint32) { return RandFloatsWithNulls(100), 1 }
-func RandFloatsWithNulls10k() ([]schema.Point, uint32) { return RandFloatsWithNulls(10000), 1 }
-func RandFloatsWithNulls1M() ([]schema.Point, uint32)  { return RandFloatsWithNulls(1000000), 1 }
+func RandFloatsWithNulls100() ([]schema.Point, uint32) { return RandFloatsWithNulls(100) }
+func RandFloatsWithNulls10k() ([]schema.Point, uint32) { return RandFloatsWithNulls(10000) }
+func RandFloatsWithNulls1M() ([]schema.Point, uint32)  { return RandFloatsWithNulls(1000000) }
 
-func RandFloatsWithNulls(size int) []schema.Point {
+func RandFloatsWithNulls(size int) ([]schema.Point, uint32) {
 	data, ok := randFloatsWithNulls[size]
+	interval := 1
 	if !ok {
 		data = make([]schema.Point, size)
-		for i := 0; i < size; i++ {
+		for i := 0; i < size; i += interval {
 			if i%2 == 0 {
 				data[i] = schema.Point{Val: math.NaN(), Ts: uint32(i)}
 			} else {
@@ -52,5 +54,5 @@ func RandFloatsWithNulls(size int) []schema.Point {
 	}
 	out := make([]schema.Point, size)
 	copy(out, data)
-	return out
+	return out, uint32(interval)
 }
