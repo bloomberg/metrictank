@@ -13,30 +13,6 @@ import (
 	"github.com/grafana/metrictank/test"
 )
 
-// todo these tests are black boxd now, unless this is changed to panic
-/*func TestLinearRegressionInvalidStartSourceAt(t *testing.T) {
-	funcLinearRegression := FuncLinearRegression{
-		in: NewMock([]models.Series{}),
-		startSourceAt: "test",
-	}
-
-	_, err := funcLinearRegression.Exec(initDataMap([]models.Series{}))
-	if err == nil {
-		t.Fatal("invalid 'startSourceAt' should result in error")
-	}
-}
-
-func TestLinearRegressionInvalidEndSourceAt(t *testing.T) {
-	funcLinearRegression := FuncLinearRegression{
-		endSourceAt: "test",
-	}
-
-	_, err := funcLinearRegression.Exec(initDataMap([]models.Series{}))
-	if err == nil {
-		t.Fatal("invalid 'endSourceAt' should result in error")
-	}
-}*/
-
 func TestLinearRegression(t *testing.T) {
 	in := []models.Series{{
 		Target: "test.value",
