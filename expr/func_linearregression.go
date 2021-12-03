@@ -14,7 +14,7 @@ import (
 type FuncLinearRegression struct {
 	in GraphiteFunc
 
-	startSourceAt string // at(1) format
+	startSourceAt string // render time format
 	endSourceAt   string
 	startSource   uint32 // epoch seconds
 	endSource     uint32
