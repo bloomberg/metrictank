@@ -2,6 +2,7 @@ package expr
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/grafana/metrictank/consolidation"
@@ -14,6 +15,7 @@ var ErrIntZeroOrPositive = errors.NewBadRequest("integer must be zero or positiv
 var ErrInvalidAggFunc = errors.NewBadRequest("Invalid aggregation func")
 var ErrNonNegativePercent = errors.NewBadRequest("The requested percent is required to be greater than 0")
 var ErrWithinZeroOneInclusiveInterval = errors.NewBadRequest("value must lie within interval [0,1]")
+var ErrPositiveNotOne = errors.NewBadRequest("value must be positive and not equal to one")
 
 // Validator is a function to validate an input
 type Validator func(e *expr) error
@@ -96,4 +98,14 @@ func IsRenderTimeFormat(e *expr) error {
 	}
 
 	return nil
+}
+
+func PositiveButNotOne(e *expr) error {
+	if e.etype == etInt && e.int > 0 && e.int != 1 {
+		return nil
+	}
+	if e.etype == etFloat && e.float > 0 && math.Abs(e.float-1) > 1e-10 {
+		return nil
+	}
+	return ErrPositiveNotOne
 }
