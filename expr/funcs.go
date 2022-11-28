@@ -92,6 +92,7 @@ func init() {
 		"invert":                       {NewInvert, true},
 		"isNonNull":                    {NewIsNonNull, true},
 		"keepLastValue":                {NewKeepLastValue, true},
+		"linearRegression":             {NewLinearRegression, true},
 		"log":                          {NewLog, true},
 		"logarithmic":                  {NewLog, true},
 		"lowest":                       {NewHighestLowestConstructor("", false), true},
