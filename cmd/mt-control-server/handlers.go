@@ -323,7 +323,7 @@ func tagsRestore(ctx *macaron.Context, request controlmodels.IndexRestoreReq) {
 		}
 
 		for p := 0; p < numPartitions; p++ {
-			partitions <- p
+			partitions <- p + request.PartitionStart
 		}
 
 		wg.Wait()
