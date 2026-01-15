@@ -556,6 +556,50 @@ func extractMetric(m string) string {
 	return m[start:end]
 }
 
+// extractInnerName is like extractMetric but with a wider character set
+func extractInnerName(m string) string {
+	start := 0
+	end := 0
+	curlyBraces := 0
+	quoteChar := byte(0)
+	allowChars := nameChar + "= " // allow = and space always
+	isAllowedChar := func(r byte) bool {
+		return strings.IndexByte(allowChars, r) >= 0
+	}
+	for end < len(m) {
+		c := m[end]
+		if (c == '\'' || c == '"') && (end == 0 || m[end-1] != '\\') {
+			// Found a non-escaped quote char
+			if quoteChar == 0 {
+				quoteChar = c
+				start = end + 1
+			} else if c == quoteChar {
+				quoteChar = byte(0)
+				start = end + 1
+			}
+		} else if quoteChar == 0 {
+			if c == '{' {
+				curlyBraces++
+			} else if c == '}' {
+				curlyBraces--
+			} else if c == ')' || (c == ',' && curlyBraces == 0) {
+				return m[start:end]
+			} else if !(isAllowedChar(c) || c == ',') {
+				start = end + 1
+			}
+		}
+
+		end++
+	}
+
+	if quoteChar != 0 {
+		log.Warnf("extractInnerName: encountered unterminated string literal in %s", m)
+		return ""
+	}
+
+	return m[start:end]
+}
+
 // aggKey returns a string key by applying the selectors
 // (integers for node positions or strings for tag names) to the given serie
 func aggKey(serie models.Series, nodes []expr) string {

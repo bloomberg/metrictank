@@ -1045,3 +1045,73 @@ func TestExtractMetric(t *testing.T) {
 		}
 	}
 }
+
+func TestExtractInnerName(t *testing.T) {
+	var tests = []struct {
+		in  string
+		out string
+	}{
+		{
+			"foo",
+			"foo",
+		},
+		{
+			"perSecond(foo)",
+			"foo",
+		},
+		{
+			"foo.bar",
+			"foo.bar",
+		},
+		{
+			"perSecond(foo.bar",
+			"foo.bar",
+		},
+		{
+			"movingAverage(foo.bar,10)",
+			"foo.bar",
+		},
+		{
+			"scale(scaleToSeconds(nonNegativeDerivative(foo.bar),60),60)",
+			"foo.bar",
+		},
+		{
+			"divideSeries(foo.bar,baz.quux)",
+			"foo.bar",
+		},
+		{
+			"sumSeries(seriesByTag('name=singleQuoted'))",
+			"",
+		},
+		{
+			`sumSeries(seriesByTag("name=doubleQuoted"))`,
+			"",
+		},
+		{
+			`sumSeries(seriesByTag('name=embeddedQuote"'))`,
+			"",
+		},
+		{
+			`sumSeries(seriesByTag('name=nonterminatedQuote"))`,
+			"",
+		},
+		{
+			`sumSeries(seriesByTag('name=\'escapedQuotes\''))`,
+			"",
+		},
+		{
+			"divideSeries(foo.bar;host=1;dc=test,baz.quux;host=1;dc=test)",
+			"foo.bar;host=1;dc=test",
+		},
+		{
+			"func(I have space=inside)",
+			"I have space=inside",
+		},
+	}
+
+	for _, tt := range tests {
+		if m := extractInnerName(tt.in); m != tt.out {
+			t.Errorf("extractInnerName(%q)=%q, want %q", tt.in, m, tt.out)
+		}
+	}
+}

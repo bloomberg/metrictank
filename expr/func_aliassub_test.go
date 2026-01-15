@@ -19,6 +19,7 @@ func TestAliasSub(t *testing.T) {
 	testAliasSub(".*\\.([^\\.]+)\\.metrics_received.*", "\\1 in", []string{"metrictank.stats.env.instance.input.pluginname.metrics_received.counter32"}, []string{"pluginname in"}, t)
 	testAliasSub(".*host=([^;]+)(;.*)?", "\\1", []string{"foo.bar.baz;a=b;host=ab1"}, []string{"ab1"}, t)
 	testAliasSub(".*([0-9].+)lue", "\\1", []string{"some.id.of.a.metric.1;my tag=the value"}, []string{"1;my tag=the va"}, t)
+	testAliasSub("(^.*$)", "\\1 A", []string{"str with space"}, []string{"str with space A"}, t)
 }
 
 func testAliasSub(search, replace string, inStr, outStr []string, t *testing.T) {

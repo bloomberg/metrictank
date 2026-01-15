@@ -43,7 +43,7 @@ func (s *FuncAliasSub) Exec(dataMap DataMap) ([]models.Series, error) {
 		// TODO - graphite doesn't attempt to extract the
 		// metric/expression from the series. MT probably shouldn't either.
 		// This will almost certainly break some dashboards
-		metric := extractMetric(serie.Target)
+		metric := extractInnerName(serie.Target)
 		if metric == "" {
 			metric = serie.Target
 		}
